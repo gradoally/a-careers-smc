@@ -1,0 +1,10 @@
+const slice addr_none = "2_"s;
+
+const int status::moderation = 0;
+const int status::active = 1;
+const int status::in_proggess = 2;
+const int status::fulfilled = 3;
+const int status::completed = 4;
+const int status::on_arbitration = 5;
+const int status::arbitration_solved = 6;
+
