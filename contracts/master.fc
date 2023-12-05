@@ -1,5 +1,100 @@
 #include "imports/stdlib.fc";
+#include "constants/constants.fc";
+#include "constants/op-codes.fc";
+#include "constants/errors.fc";
+#include "logic/utils.fc";
+
+global slice storage::admin_address;
+
+global cell storage::order_code;
+global cell storage::user_code;
+global cell storage::admin_code;
+
+global int storage::order_next_index;
+global int storage::user_next_index;
+global int storage::admin_next_index;
+
+{-
+_ order_code:^Cell user_code:^Cell admin_code:^Cell = Codes;
+_ order_next_index:uint64 user_next_index:uint64 admin_next_index:uint64 = Indexes;
+_ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
+-}
+
+() load_data() impure {
+    slice ds = get_data().begin_parse();
+
+    storage::admin_address = ds~load_msg_addr();
+
+    slice codes = ds~load_ref().begin_parse();
+    storage::order_code = codes~load_ref();
+    storage::user_code = codes~load_ref();
+    storage::admin_code = codes~load_ref();
+
+    slice indexes = ds~load_ref().begin_parse();
+    storage::order_next_index = indexes~load_uint(32);
+    storage::user_next_index = indexes~load_uint(32);
+    storage::admin_next_index = indexes~load_uint(32);
+}
+
+() save_data() impure {
+    cell codes = begin_cell()
+        .store_ref(storage::order_code)
+        .store_ref(storage::user_code)
+        .store_ref(storage::admin_code)
+        .end_cell();
+
+    cell indexes = begin_cell()
+        .store_uint(storage::order_next_index, 32)
+        .store_uint(storage::user_next_index, 32)
+        .store_uint(storage::admin_next_index, 32)
+        .end_cell();
+
+    cell data = begin_cell()
+        .store_slice(storage::admin_address)
+        .store_ref(codes)
+        .store_ref(indexes)
+        .end_cell();
+
+    set_data(data);
+}
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    slice cs = in_msg_full.begin_parse();
+    int flags = in_msg_full~load_uint(4);
+    slice sender_address = in_msg_full~load_msg_addr();
+    ;; support bounce?
 
+    load_data();
+    int op = in_msg_body~load_uint(32);
+    int query_id = in_msg_body~load_uint(64);
+
+    if (op == op::activate_order_master) {
+        int admin_index = in_msg_body~load_uint(64);
+        throw_unless(error:unauthorized, equal_slices(sender_address,
+                calculate_contract_address(calculate_contract_state_init(admin_index, storage::admin_code))));
+
+        ;; TODO: Implement
+
+        return ();
+    }
+
+    if (op == op::add_response_master) {
+        int user_index = in_msg_body~load_uint(64);
+        throw_unless(error:unauthorized, equal_slices(sender_address,
+            calculate_contract_address(calculate_contract_state_init(user_index, storage::user_code))));
+
+        ;; TODO: Implement
+
+        return ();
+    }
+
+    if (op == op::process_arbitration_master) {
+        int admin_index = in_msg_body~load_uint(64);
+        throw_unless(error:unauthorized, equal_slices(sender_address,
+            calculate_contract_address(calculate_contract_state_init(admin_index, storage::admin_code))));
+
+        ;; TODO: Implement
+
+        return ();
+    }
 }

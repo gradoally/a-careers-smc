@@ -1,5 +1,6 @@
 #include "imports/stdlib.fc";
 #include "constants/constants.fc";
+#include "constants/op-codes.fc";
 #include "constants/errors.fc";
 
 global int storage::init?;
@@ -10,9 +11,10 @@ global slice storage::customer_address;
 global slice storage::freelancer_address;
 global cell storage::content;
 global cell storage::responses;
+
 {-
-    _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freelancer_address:MsgAddress
- content:(HashmapE 256 ^Cell) responses:(HashmapE 256 ^Cell) status:uint8 = OrderStorage;
+_ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freelancer_address:MsgAddress
+  content:(HashmapE 256 ^Cell) responses:(HashmapE 256 ^Cell) status:uint8 = OrderStorage;
 -}
 
 () load_data() impure {
@@ -53,8 +55,8 @@ global cell storage::responses;
     slice sender_address = in_msg_full~load_msg_addr();
     ;; support bounce?
 
-
-    if(storage::init?) {
+    load_data();
+    if (storage::init?) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         storage::customer_address = in_msg_body~load_msg_addr();
         storage::freelancer_address = addr_none;
@@ -66,5 +68,58 @@ global cell storage::responses;
         return ();
     }
 
+    int op = in_msg_body~load_uint(32);
+    int query_id = in_msg_body~load_uint(64);
 
+    if (op == op::activate_order) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
+        throw_unless(error::invalid_status, storage::status == status::moderation);
+        storage::status = status::active;
+        save_data();
+        return ();
+    }
+
+    if (op == op::add_response) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
+        throw_unless(error::invalid_status, storage::status == status::active);
+
+        ;; TODO: Implement
+
+        return ();
+    }
+
+    if (op == op::assign_user) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
+        throw_unless(error::invalid_status, storage::status == status::active);
+        storage::status = status::in_proggess;
+        storage::freelancer_address = in_msg_body~load_msg_addr();
+        save_data();
+        return ();
+    }
+
+    if (op == op::complete_order) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::freelancer_address));
+        throw_unless(error::invalid_status, storage::status == status::in_proggess);
+        storage::status = status::fulfilled;
+        save_data();
+        return ();
+    }
+
+    if (op == op::customer_feedback) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
+        throw_unless(error::invalid_status, storage::status == status::fulfilled);
+
+        ;; TODO: Implement
+
+        return ();
+    }
+
+    if (op == op::process_arbitration) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
+        throw_unless(error::invalid_status, storage::status == status::on_arbitration);
+
+        ;; TODO: Implement. From admins
+
+        return ();
+    }
 }

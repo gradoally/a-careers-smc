@@ -1,0 +1,15 @@
+;; --------------- Order ---------------
+
+const op::activate_order = 1;
+const op::add_response = 2;
+const op::assign_user = 3;
+const op::complete_order = 4;
+const op::customer_feedback = 5;
+const op::process_arbitration = 6;
+
+
+;; --------------- Master ---------------
+
+const int op::activate_order_master = 7;
+const int op::add_response_master = 8;
+const int op::process_arbitration_master = 9;

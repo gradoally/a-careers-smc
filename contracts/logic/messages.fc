@@ -1,0 +1,30 @@
+#include "../imports/stdlib.fc";
+#include "../constants/constants.fc";
+
+builder store_maybe_state_init(builder b, cell c) impure asm """
+    DUP // b c c
+    ISNULL // b c ?
+    IF:<{ // b c
+        DROP // b
+        2 PUSHINT // b 2
+        STZEROES // b'
+    }>ELSE<{ // b c
+        SWAP // c b
+        2 PUSHINT // c b 2
+        STONES // c b'
+        STREF // b''
+    }>
+""";
+
+() messages::send_simple_bounceable(slice destination_address, int amount, cell state_init, cell body, int mode) {
+    cell msg = begin_cell()
+        .store_uint(flag::bounceable, 6)
+        .store_slice(destination_address)
+        .store_coins(amount)
+        .store_uint(0, 1 + 4 + 4 + 64 + 32)
+        .store_maybe_state_init(state_init)
+        .store_maybe_ref(body)
+        .end_cell();
+
+    send_raw_message(msg, mode);
+}

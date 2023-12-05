@@ -1,4 +1,14 @@
 const slice addr_none = "2_"s;
+const int workchain = 0;
+const int flag::bounceable = 0x18;
+const int flag::non_bounceable = 0x10;
+
+const int mode::normal = 0;
+const int mode::remaining_amount = 64;
+const int mode::available_balance = 128;
+const int flag::gas_separately = 1;
+const int flag::ignore_errors = 2;
+const int flag::destroy = 32;
 
 const int status::moderation = 0;
 const int status::active = 1;
@@ -7,4 +17,3 @@ const int status::fulfilled = 3;
 const int status::completed = 4;
 const int status::on_arbitration = 5;
 const int status::arbitration_solved = 6;
-

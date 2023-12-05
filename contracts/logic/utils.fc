@@ -1,0 +1,24 @@
+#include "../imports/stdlib.fc";
+#include "../constants/constants.fc";
+
+cell calculate_contract_state_init(int index, cell code) {
+    cell data = begin_cell()
+        .store_uint(index, 64)
+        .store_slice(my_address())
+        .end_cell();
+
+    return begin_cell()
+        .store_uint(0, 2)
+        .store_dict(code)
+        .store_dict(data)
+        .store_uint(0, 1)
+        .end_cell();
+}
+
+slice calculate_contract_address(cell state_init) {
+    return begin_cell().store_uint(4, 3)
+        .store_int(workchain, 8)
+        .store_uint(cell_hash(state_init), 256)
+        .end_cell()
+        .begin_parse();
+}
