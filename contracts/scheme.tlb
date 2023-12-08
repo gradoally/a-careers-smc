@@ -125,7 +125,7 @@ _ grams:Grams = Coins;
 
 // 1023 - 64 + 267 + 267 + 267 + 1 + 1 + 8 = 148 bits
 _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freelancer_address:MsgAddress
- content:(HashmapE 256 ^Cell) responses:(HashmapE 256 Cell) status:uint8 = OrderStorage;
+ content:(HashmapE 256 Cell) responses:(HashmapE 256 Cell) status:uint8 = OrderStorage;
 
 
 // --------------- Master ---------------
@@ -133,3 +133,18 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
 _ order_code:^Cell user_code:^Cell admin_code:^Cell = Codes;
 _ order_next_index:uint64 user_next_index:uint64 admin_next_index:uint64 = Indexes;
 _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
+
+create_order_master# query_id:uint32 user_index:uint64 user_address:MsgAddressInt
+  content:(HashmapE 256 Cell) = InternalMsgBody;
+
+
+// --------------- User ---------------
+
+_ index:uint64 master_address:MsgAddressInt revoked_at:uint32 content:(HashmapE 256 Cell) = UserStorage;
+
+create_order# query_id:uint32 content:(HashmapE 256 Cell) = InternalMsgBody;
+
+
+// --------------- Admin ---------------
+
+_ index:uint64 master_address:MsgAddressInt revoked_at:uint32 = AdminStorage;

@@ -48,6 +48,12 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     );
 }
 
+() validate_caterogy(slice admin_category) impure inline_ref {
+    if (~ equal_slices(admin_category, "all")) {
+        (slice order_category, _) = storage::content.udict_get?(256, "category"H);
+        throw_unless(error::invalid_category, equal_slices(admin_category, order_category));
+    }
+}
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     slice cs = in_msg_full.begin_parse();
@@ -74,6 +80,8 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     if (op == op::activate_order) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::moderation);
+        slice admin_category = in_msg_body~load_ref().begin_parse();
+        validate_caterogy(admin_category);
         storage::status = status::active;
         save_data();
         return ();
@@ -117,7 +125,8 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     if (op == op::process_arbitration) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::on_arbitration);
-
+        slice admin_category = in_msg_body~load_ref().begin_parse();
+        validate_caterogy(admin_category);
         ;; TODO: Implement. From admins
 
         return ();

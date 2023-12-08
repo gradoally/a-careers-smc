@@ -1,4 +1,5 @@
 const int error:unauthorized = 401;
+const int error::invalid_category = 402;
 
 ;; --------------- Order ---------------
 const int error::invalid_status = 500;

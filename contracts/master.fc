@@ -3,6 +3,7 @@
 #include "constants/op-codes.fc";
 #include "constants/errors.fc";
 #include "logic/utils.fc";
+#include "logic/messages.fc";
 
 global slice storage::admin_address;
 
@@ -68,6 +69,31 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
 
+    ;; TODO: List of available categories? Validate category on order creation?
+
+
+    ;; --------------- Interactions with user ---------------
+    if (op == op::create_order_master) {
+        int user_index = in_msg_body~load_uint(64);
+        throw_unless(error:unauthorized, equal_slices(sender_address,
+            calculate_contract_address(calculate_contract_state_init(user_index, storage::user_code))));
+
+        cell order_state_init = calculate_contract_state_init(storage::order_next_index, storage::order_code);
+        cell order_address = calculate_contract_address(order_state_init);
+
+        ;; TODO: Implement fees. Deduct service fee on master or on order?
+        ;; raw_reserve?
+
+        ;; TODO: 64 mode?
+        messages::send_simple_bounceable(order_address, 0, order_state_init, in_msg_body, 64);
+        storage::order_next_index += 1;
+        save_data();
+        return ();
+    }
+
+
+    ;; --------------- Interactions with order ---------------
+
     if (op == op::activate_order_master) {
         int admin_index = in_msg_body~load_uint(64);
         throw_unless(error:unauthorized, equal_slices(sender_address,
@@ -97,4 +123,6 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
 
         return ();
     }
+
+    throw(0xFFFF);
 }

@@ -13,3 +13,18 @@ const op::process_arbitration = 6;
 const int op::activate_order_master = 7;
 const int op::add_response_master = 8;
 const int op::process_arbitration_master = 9;
+
+const int op::create_order_master = 11;
+
+
+;; --------------- User ---------------
+
+const int op::create_order = 10;
+
+
+;; --------------- Admin ---------------
+
+const int op::activate_order_admin = 12;
+const int op::activate_user_admin = 13;
+const int op::process_arbitration_admin = 14;
+;;const int op::activate_order_admin = 15;

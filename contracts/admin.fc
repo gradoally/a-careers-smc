@@ -1,10 +1,15 @@
 #include "imports/stdlib.fc";
 #include "constants/constants.fc";
 #include "constants/errors.fc";
+#include "constants/op-codes.fc";
+#include "logic/messages.fc";
 
 global int storage::init?;
 global int storage::index;
 global slice storage::master_address;
+global slice storage::admin_address;
+global slice storage::revoked_at;
+global cell storage::content;
 
 () load_data() impure {
     slice ds = get_data().begin_parse();
@@ -14,19 +19,70 @@ global slice storage::master_address;
 
     if(slice_bits(ds) > 0) {
         storage::init? = true;
+        storage::admin_address = ds~load_msg_addr();
+        storage::revoked_at = ds~load_uint(32);
+        storage::content = ds~load_ref();
     } else {
         storage::init? = false;
+        storage::admin_address = addr_none;
+        storage::revoked_at = 0;
+        storage::content = null();
     }
 }
 
 () save_data() impure {
     set_data(begin_cell()
-    .store_uint(storage::index, 64)
-    .store_slice(storage::master_address)
-    .end_cell()
+        .store_uint(storage::index, 64)
+        .store_slice(storage::master_address)
+        .store_slice(storage::admin_address)
+        .store_uint(storage::revoked_at, 32)
+        .store_ref(storage::content)
+        .end_cell()
     );
 }
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    slice cs = in_msg_full.begin_parse();
+    int flags = in_msg_full~load_uint(4);
+    slice sender_address = in_msg_full~load_msg_addr();
+    ;; support bounce?
 
+    load_data();
+    if (storage::init?) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
+        storage::admin_address = in_msg_body~load_msg_addr();
+        storage::revoked_at = 0;
+        storage::content = in_msg_body~load_dict();
+        save_data();
+        return ();
+    }
+
+
+    int op = in_msg_body~load_uint(32);
+    int query_id = in_msg_body~load_uint(64);
+
+    if(equal_slices(sender_address, storage::admin_address)) {
+        if (op == op::activate_order_admin) {
+            ;; TODO: Implement
+            return ();
+        }
+
+        if (op == op::activate_user_admin) {
+            ;; TODO: Implement
+            return ();
+        }
+
+        if (op == op::process_arbitration_admin) {
+            ;; TODO: Implement
+            return ();
+        }
+
+        throw(0xFFFF);
+    }
+
+    if(equal_slices(sender_address, storage::master_address)) {
+        ;; TODO: Handle master messages
+
+        throw(0xFFFF);
+    }
 }
