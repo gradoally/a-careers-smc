@@ -1,7 +1,7 @@
 #include "../imports/stdlib.fc";
 #include "../constants/constants.fc";
 
-cell calculate_contract_state_init(int index, cell code) {
+cell calculate_contract_state_init(int index, cell code) inline_ref {
     cell data = begin_cell()
         .store_uint(index, 64)
         .store_slice(my_address())
@@ -15,7 +15,7 @@ cell calculate_contract_state_init(int index, cell code) {
         .end_cell();
 }
 
-slice calculate_contract_address(cell state_init) {
+slice calculate_contract_address(cell state_init) inline_ref {
     return begin_cell().store_uint(4, 3)
         .store_int(workchain, 8)
         .store_uint(cell_hash(state_init), 256)

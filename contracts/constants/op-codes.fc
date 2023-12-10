@@ -1,25 +1,34 @@
 ;; --------------- Order ---------------
 
-const op::activate_order = 1;
-const op::add_response = 2;
-const op::assign_user = 3;
-const op::complete_order = 4;
-const op::customer_feedback = 5;
-const op::process_arbitration = 6;
-
+const int op::activate_order = 1;
+const int op::add_response = 2;
+const int op::assign_user = 3;
+const int op::complete_order = 4;
+const int op::customer_feedback = 5;
+const int op::process_arbitration = 6;
+const int op::set_admins = 17;
+const int op::order_completed = 20;
+const int op::order_completed_notification = 21;
 
 ;; --------------- Master ---------------
 
 const int op::activate_order_master = 7;
 const int op::add_response_master = 8;
 const int op::process_arbitration_master = 9;
-
 const int op::create_order_master = 11;
-
+const int op::get_admins = 16;
+const int op::create_admin = 18;
+const int op::order_activate_notification = 19;
+const int op::revoke_admin_master = 22;
+const int op::revoke_user_master = 23;
+const int op::admin_revoked_notification = 26;
+const int op::activate_user_master = 27;
 
 ;; --------------- User ---------------
 
 const int op::create_order = 10;
+const int op::revoke_user = 24;
+const int op::activate_user = 28;
 
 
 ;; --------------- Admin ---------------
@@ -27,4 +36,4 @@ const int op::create_order = 10;
 const int op::activate_order_admin = 12;
 const int op::activate_user_admin = 13;
 const int op::process_arbitration_admin = 14;
-;;const int op::activate_order_admin = 15;
+const int op::revoke_admin = 25;

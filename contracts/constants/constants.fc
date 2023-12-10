@@ -15,5 +15,11 @@ const int status::active = 1;
 const int status::in_proggess = 2;
 const int status::fulfilled = 3;
 const int status::completed = 4;
-const int status::on_arbitration = 5;
-const int status::arbitration_solved = 6;
+const int status::pre_arbitration = 5;
+const int status::on_arbitration = 6;
+const int status::arbitration_solved = 7;
+
+const int hash::category = "category"H;
+
+const int const::scale_factor = 1000000000; ;; 1e9
+const int const::agreement_perc = 666666666;

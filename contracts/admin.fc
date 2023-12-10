@@ -2,6 +2,7 @@
 #include "constants/constants.fc";
 #include "constants/errors.fc";
 #include "constants/op-codes.fc";
+#include "constants/fees.fc";
 #include "logic/messages.fc";
 
 global int storage::init?;
@@ -62,18 +63,36 @@ global cell storage::content;
     int query_id = in_msg_body~load_uint(64);
 
     if(equal_slices(sender_address, storage::admin_address)) {
+        throw_unless(error:unauthorized, storage::revoked_at == 0);
         if (op == op::activate_order_admin) {
+            throw_unless(error::not_enough_ton, msg_value >= fee::order_activation);
             ;; TODO: Implement
             return ();
         }
 
         if (op == op::activate_user_admin) {
+            throw_unless(error::not_enough_ton, msg_value >= fee::user_activation);
             ;; TODO: Implement
             return ();
         }
 
         if (op == op::process_arbitration_admin) {
-            ;; TODO: Implement
+            throw_unless(error::not_enough_ton, msg_value >= fee::process_arbitration);
+            int order_index = in_msg_body~load_uint(64);
+            int freelancer_part = in_msg_body~load_uint(8);
+            int customer_part = in_msg_body~load_uint(8);
+            throw_unless(error::invalid_parts, (freelancer_part + customer_part) == 100);
+            (slice caterogy, _) = storage::content.udict_get?(256, "caterogy"H);
+            cell body = begin_cell()
+                .store_uint(op::process_arbitration_master, 32)
+                .store_uint(query_id, 64)
+                .store_uint(storage::index, 64)
+                .store_uint(slice_hash(caterogy), 256)
+                .store_uint(order_index, 64)
+                .store_uint(freelancer_part, 8)
+                .store_uint(customer_part, 8)
+                .end_cell();
+            messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
             return ();
         }
 
@@ -81,6 +100,21 @@ global cell storage::content;
     }
 
     if(equal_slices(sender_address, storage::master_address)) {
+        if (op == op::revoke_admin) {
+            throw_unless(error::already_revoked, storage::revoked_at == 0);
+            storage::revoked_at = now();
+            (slice caterogy, _) = storage::content.udict_get?(256, "caterogy"H);
+            cell body = begin_cell()
+                .store_uint(op::admin_revoked_notification, 32)
+                .store_uint(query_id, 64)
+                .store_uint(storage::index, 64)
+                .store_uint(slice_hash(caterogy), 256)
+                .end_cell();
+            messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
+            save_data();
+            return ();
+        }
+
         ;; TODO: Handle master messages
 
         throw(0xFFFF);

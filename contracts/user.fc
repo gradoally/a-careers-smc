@@ -2,6 +2,7 @@
 #include "constants/constants.fc";
 #include "constants/errors.fc";
 #include "constants/op-codes.fc";
+#include "constants/fees.fc";
 #include "logic/messages.fc";
 
 global int storage::init?;
@@ -51,7 +52,7 @@ global cell storage::content;
     if (storage::init?) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         storage::user_address = in_msg_body~load_msg_addr();
-        storage::revoked_at = 0;
+        storage::revoked_at = -1;
         storage::content = in_msg_body~load_dict();
         save_data();
         return ();
@@ -61,7 +62,9 @@ global cell storage::content;
     int query_id = in_msg_body~load_uint(64);
 
     if(equal_slices(sender_address, storage::user_address)) {
+        throw_unless(error:unauthorized, storage::revoked_at == 0);
         if (op == op::create_order) {
+            throw_unless(error::not_enough_ton, msg_value >= fee::order_creation);
             cell content = in_msg_body~load_dict();
             in_msg_body.end_parse();
             cell body = begin_cell()
@@ -80,6 +83,19 @@ global cell storage::content;
     }
 
     if(equal_slices(sender_address, storage::master_address)) {
+        if (op == op::activate_user) {
+            storage::revoked_at = 0;
+            save_data();
+            return ();
+        }
+
+        if (op == op::revoke_admin) {
+            throw_unless(error::already_revoked, storage::revoked_at == 0);
+            storage::revoked_at = now();
+            save_data();
+            return ();
+        }
+
         ;; TODO: Handle master messages
 
         throw(0xFFFF);

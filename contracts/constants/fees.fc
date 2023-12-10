@@ -1,0 +1,19 @@
+;; --------------- Order ---------------
+
+
+
+
+;; --------------- Master ---------------
+
+const int fee::admin_creation = 1; ;; TODO: Change
+
+;; --------------- User ---------------
+
+const int fee::order_creation = 1;
+
+
+;; --------------- Admin ---------------
+
+const int fee::process_arbitration = 1;
+const int fee::order_activation = 2;
+const int fee::user_activation = 2;

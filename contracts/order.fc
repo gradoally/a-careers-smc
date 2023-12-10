@@ -2,15 +2,23 @@
 #include "constants/constants.fc";
 #include "constants/op-codes.fc";
 #include "constants/errors.fc";
+#include "logic/messages.fc";
 
 global int storage::init?;
 global int storage::index;
 global int storage::status;
+global int storage::price;
+global int storage::admin_count;
 global slice storage::master_address;
 global slice storage::customer_address;
 global slice storage::freelancer_address;
 global cell storage::content;
 global cell storage::responses;
+
+global int storage::admin_voted_count;
+global int storage::freelancer_part;
+global int storage::customer_part;
+global int storage::admin_count;
 
 {-
 _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freelancer_address:MsgAddress
@@ -28,30 +36,48 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::customer_address = ds~load_msg_addr();
         storage::freelancer_address = ds~load_msg_addr();
         storage::content = ds~load_dict();
+        storage::price = ds~load_coins();
         storage::responses = ds~load_dict();
         storage::status = ds~load_uint(8);
+        storage::admin_count = ds~load_uint(64);
+
+        cell arbitration_data = ds~load_ref();
+        storage::admin_voted_count = arbitration_data~load_uint(64);
+        storage::freelancer_part = arbitration_data~load_uint(8);
+        storage::customer_part = arbitration_data~load_uint(8);
+        storage::admin_count = arbitration_data~load_uint(64);
     } else {
         storage::init? = false;
     }
 }
 
 () save_data() impure {
+    cell arbitration_data = begin_cell()
+        .store_uint(storage::admin_voted_count, 64)
+        .store_uint(storage::freelancer_part, 8)
+        .store_uint(storage::customer_part, 8)
+        .store_uint(storage::admin_count, 64)
+        .end_cell();
+
     set_data(begin_cell()
         .store_uint(storage::index, 64)
         .store_slice(storage::master_address)
         .store_slice(storage::customer_address)
         .store_slice(storage::master_address)
         .store_dict(storage::content)
+        .store_coins(storage::price)
         .store_dict(storage::responses)
         .store_uint(storage::status, 8)
+        .store_uint(storage::admin_count, 64)
+        .store_ref(arbitration_data)
         .end_cell()
     );
 }
 
-() validate_caterogy(slice admin_category) impure inline_ref {
-    if (~ equal_slices(admin_category, "all")) {
-        (slice order_category, _) = storage::content.udict_get?(256, "category"H);
-        throw_unless(error::invalid_category, equal_slices(admin_category, order_category));
+() validate_caterogy(int admin_category) impure inline_ref {
+    if (admin_category != "all"H) {
+        (slice order_category, _) = storage::content.udict_get?(256, hash::category);
+        throw_unless(error::invalid_category, admin_category == slice_hash(admin_category));
     }
 }
 
@@ -67,9 +93,15 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::customer_address = in_msg_body~load_msg_addr();
         storage::freelancer_address = addr_none;
         storage::content = in_msg_body~load_dict();
+        storage::price = in_msg_body~load_coins();
         storage::responses = null();
         storage::status = status::moderation;
+        storage::admin_count = 0;
 
+        storage::admin_voted_count = 0;
+        storage::freelancer_part = 0;
+        storage::customer_part = 0;
+        storage::admin_count = 0;
         save_data();
         return ();
     }
@@ -80,9 +112,19 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     if (op == op::activate_order) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::moderation);
-        slice admin_category = in_msg_body~load_ref().begin_parse();
+        int admin_category = in_msg_body~load_uint(256);
         validate_caterogy(admin_category);
         storage::status = status::active;
+
+        (slice category, _) = storage::content.udict_get?(256, hash::category);
+        int category_hash = slice_hash(category);
+        cell body = begin_cell()
+            .store_uint(op::order_activate_notification, 32)
+            .store_uint(query_id, 64)
+            .store_uint(storage::index, 64)
+            .store_uint(category_hash, 256)
+            .end_cell();
+        messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
         save_data();
         return ();
     }
@@ -99,6 +141,9 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     if (op == op::assign_user) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
         throw_unless(error::invalid_status, storage::status == status::active);
+
+        ;; TODO: Take price from customer
+
         storage::status = status::in_proggess;
         storage::freelancer_address = in_msg_body~load_msg_addr();
         save_data();
@@ -118,16 +163,70 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         throw_unless(error::invalid_status, storage::status == status::fulfilled);
 
         ;; TODO: Implement
+        int arbitration? = true;
+        if(arbitration?) {
+            (slice caterogy, _) = storage::content.udict_get?(256, "caterogy"H);
+            cell body = begin_cell()
+                .store_uint(op::get_admins, 32)
+                .store_uint(query_id, 64)
+                .store_uint(storage::index, 64)
+                .store_uint(slice_hash(caterogy), 256)
+                .end_cell();
+            messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
+            return ();
+        }
 
+        cell body = begin_cell()
+            .store_uint(op::order_completed, 32)
+            .store_uint(query_id, 64)
+            .end_cell();
+        messages::send_simple_non_bounceable(storage::freelancer_address, storage::price, null(), body, 1);
+        messages::send_simple_non_bounceable(storage::customer_address, 0, null(), body, 128);
+        return ();
+    }
+
+    if (op == op::set_admins) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
+        throw_unless(error::invalid_status, storage::status == status::pre_arbitration);
+        storage::admin_count = in_msg_body~load_uint(64);
+        storage::status = status::on_arbitration;
+        save_data();
         return ();
     }
 
     if (op == op::process_arbitration) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::on_arbitration);
-        slice admin_category = in_msg_body~load_ref().begin_parse();
+        int admin_category = in_msg_body~load_uint(256);
         validate_caterogy(admin_category);
         ;; TODO: Implement. From admins
+
+        storage::freelancer_part += in_msg_body~load_uint(8);
+        storage::customer_part += in_msg_body~load_uint(8);
+        storage::admin_voted_count += 1;
+
+        if((storage::admin_voted_count * const::scale_factor / storage::admin_count) >= const::agreement_perc) {
+            int customer_part = storage::price * storage::freelancer_part / storage::admin_voted_count / 100;
+            int freelancer_part = storage::price - customer_part;
+            cell body = begin_cell()
+                .store_uint(op::order_completed, 32)
+                .store_uint(query_id, 64)
+                .end_cell();
+            ;; TODO: raw_reserve? all balance to customer?
+            messages::send_simple_non_bounceable(storage::customer_address, customer_part, null(), body, 1);
+            messages::send_simple_non_bounceable(storage::freelancer_address, freelancer_part, null(), body, 1);
+
+            (slice caterogy, _) = storage::content.udict_get?(256, "caterogy"H);
+            body = begin_cell()
+                .store_uint(op::order_completed_notification, 32)
+                .store_uint(query_id, 64)
+                .store_uint(storage::index, 64)
+                .store_uint(slice_hash(caterogy), 256)
+                .end_cell();
+            messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
+            storage::status = status::arbitration_solved;
+            save_data();
+        }
 
         return ();
     }
