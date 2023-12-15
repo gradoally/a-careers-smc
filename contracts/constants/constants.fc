@@ -23,6 +23,6 @@ const int status::arbitration_solved = 8;
 const int hash::category = "category"H;
 
 const int const::scale_factor = 1000000000; ;; 1e9
-const int const::agreement_perc = 666666666;
+const int const::agreement_perc = 666666667;
 
 const int const::max_responses = 255;

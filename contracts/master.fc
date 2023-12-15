@@ -98,17 +98,17 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
 
 (slice, int) from_admin?(in_msg_body) impure {
     if (equal_slices(msg::sender_address, storage::root_address)) {
-        return (in_msg_body, true);
+        return (in_msg_body, -1);
     }
 
     int admin_index = in_msg_body~load_uint(64);
     throw_unless(error:unauthorized, equal_slices(msg::sender_address,
         calculate_contract_address(calculate_contract_state_init(admin_index, storage::admin_code))));
     if (in_msg_body~load_uint(256) == "all"H) {
-        return (in_msg_body, true);
+        return (in_msg_body, 1);
     }
 
-    return (in_msg_body, false);
+    return (in_msg_body, 0);
 }
 
 
@@ -130,6 +130,12 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         throw_unless(error:unauthorized, admin?);
         throw_unless(error::not_enough_ton, msg_value >= fee::admin_creation);
         cell content = in_msg_body~load_dict();
+        if (admin? == 1) {
+            ;; todo: check categories
+            (slice category, int f) = content.udict_get?(256, hash::category);
+            throw_unless(error::invalid_content, f == true);
+            throw_unless(error:unauthorized, slice_hash(category) != "all"H);
+        }
         slice admin_address = in_msg_body~load_msg_addr();
         in_msg_body.end_parse();
 

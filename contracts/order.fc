@@ -204,7 +204,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
 
     if (op == op::cancel_assign) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
-        throw_unless(error::invalid_status, storage::status == status::active);
+        throw_unless(error::invalid_status, storage::status == status::waiting_freelancer);
         messages::send_simple_non_bounceable(storage::master_address, storage::price, null(), null(), 1);
         storage::status = status::active;
         save_data();
