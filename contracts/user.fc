@@ -66,6 +66,8 @@ global cell storage::content;
         if (op == op::create_order) {
             throw_unless(error::not_enough_ton, msg_value >= fee::order_creation);
             cell content = in_msg_body~load_dict();
+            int price = in_msg_body~load_coins();
+            int deadline = in_msg_body~load_uint(32);
             in_msg_body.end_parse();
             cell body = begin_cell()
                 .store_uint(op::create_order_master, 32)
@@ -73,8 +75,26 @@ global cell storage::content;
                 .store_uint(storage::index, 64)
                 .store_slice(storage::user_address)
                 .store_dict(content)
+                .store_coins(price)
+                .store_uint(deadline, 32)
                 .end_cell();
-            ;; TODO: bounceable?
+
+            messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);
+            return ();
+        }
+
+        if (op == op::add_response_user) {
+            (slice is_freelancer?, _) = storage::content.udict_get?(256, "is_freelancer");
+            throw_unless(error::not_freelancer, is_freelancer?.preload_int(1));
+            int order_id = in_msg_body~load_uint(64);
+
+            cell body = begin_cell()
+                .store_uint(op::add_response_master, 32)
+                .store_uint(query_id, 64)
+                .store_uint(storage::index, 64)
+                .store_uint(order_id, 64)
+                .store_slice(storage::user_address)
+                .end_cell();
             messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);
             return ();
         }

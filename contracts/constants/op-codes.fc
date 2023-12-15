@@ -3,6 +3,9 @@
 const int op::activate_order = 1;
 const int op::add_response = 2;
 const int op::assign_user = 3;
+const int op::accept_order = 30;
+const int op::reject_order = 31;
+const int op::cancel_assign = 32;
 const int op::complete_order = 4;
 const int op::customer_feedback = 5;
 const int op::process_arbitration = 6;
@@ -23,12 +26,14 @@ const int op::revoke_admin_master = 22;
 const int op::revoke_user_master = 23;
 const int op::admin_revoked_notification = 26;
 const int op::activate_user_master = 27;
+const int op::order_fee = 33;
 
 ;; --------------- User ---------------
 
 const int op::create_order = 10;
 const int op::revoke_user = 24;
 const int op::activate_user = 28;
+const int op::add_response_user = 29;
 
 
 ;; --------------- Admin ---------------

@@ -2,18 +2,23 @@
 #include "constants/constants.fc";
 #include "constants/op-codes.fc";
 #include "constants/errors.fc";
+#include "constants/fees.fc";
 #include "logic/messages.fc";
 
 global int storage::init?;
 global int storage::index;
 global int storage::status;
 global int storage::price;
+global int storage::deadline;
+global int storage::protocol_fee_numerator;
+global int storage::protocol_fee_denominator;
 global int storage::admin_count;
 global slice storage::master_address;
 global slice storage::customer_address;
 global slice storage::freelancer_address;
 global cell storage::content;
 global cell storage::responses;
+global int storage::responses_count;
 
 global int storage::admin_voted_count;
 global int storage::freelancer_part;
@@ -29,17 +34,22 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     slice ds = get_data().begin_parse();
 
     storage::index = ds~load_uint(64);
-    storage::master_address = ds~load_msg_addr();
+    slice addresses = ds~load_ref().begin_parse();
+    storage::master_address = addresses~load_msg_addr();
 
     if(slice_bits(ds) > 0) {
         storage::init? = true;
-        storage::customer_address = ds~load_msg_addr();
-        storage::freelancer_address = ds~load_msg_addr();
+        storage::customer_address = addresses~load_msg_addr();
+        storage::freelancer_address = addresses~load_msg_addr();
         storage::content = ds~load_dict();
         storage::price = ds~load_coins();
+        storage::deadline = ds~load_uint(32);
+        storage::protocol_fee_numerator = ds~load_uint(8);
+        storage::protocol_fee_denominator = ds~load_uint(8);
         storage::responses = ds~load_dict();
         storage::status = ds~load_uint(8);
         storage::admin_count = ds~load_uint(64);
+        storage::responses_count = ds~load_uint(8);
 
         cell arbitration_data = ds~load_ref();
         storage::admin_voted_count = arbitration_data~load_uint(64);
@@ -58,17 +68,24 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         .store_uint(storage::customer_part, 8)
         .store_uint(storage::admin_count, 64)
         .end_cell();
+    cell addresses = begin_cell()
+        .store_slice(storage::master_address)
+        .store_slice(storage::customer_address)
+        .store_slice(storage::freelancer_address)
+        .end_cell();
 
     set_data(begin_cell()
         .store_uint(storage::index, 64)
-        .store_slice(storage::master_address)
-        .store_slice(storage::customer_address)
-        .store_slice(storage::master_address)
+        .store_ref(addresses)
         .store_dict(storage::content)
         .store_coins(storage::price)
+        .store_uint(storage::deadline, 32)
+        .store_uint(storage::protocol_fee_numerator, 8)
+        .store_uint(storage::protocol_fee_denominator, 8)
         .store_dict(storage::responses)
         .store_uint(storage::status, 8)
         .store_uint(storage::admin_count, 64)
+        .store_uint(storage::responses_count, 8)
         .store_ref(arbitration_data)
         .end_cell()
     );
@@ -77,7 +94,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
 () validate_caterogy(int admin_category) impure inline_ref {
     if (admin_category != "all"H) {
         (slice order_category, _) = storage::content.udict_get?(256, hash::category);
-        throw_unless(error::invalid_category, admin_category == slice_hash(admin_category));
+        throw_unless(error::invalid_category, admin_category == slice_hash(order_category));
     }
 }
 
@@ -94,14 +111,17 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::freelancer_address = addr_none;
         storage::content = in_msg_body~load_dict();
         storage::price = in_msg_body~load_coins();
+        storage::deadline = in_msg_body~load_uint(32);
+        storage::protocol_fee_numerator = in_msg_body~load_uint(8);
+        storage::protocol_fee_denominator = in_msg_body~load_uint(8);
         storage::responses = null();
+        storage::responses_count = 0;
         storage::status = status::moderation;
         storage::admin_count = 0;
 
         storage::admin_voted_count = 0;
         storage::freelancer_part = 0;
         storage::customer_part = 0;
-        storage::admin_count = 0;
         save_data();
         return ();
     }
@@ -132,27 +152,68 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     if (op == op::add_response) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::active);
-
-        ;; TODO: Implement
-
+        throw_unless(error::too_many_responsed, storage::responses_count < const::max_responses);
+        (_, int f) = storage::responses.udict_get?(267, sender_address);
+        throw_unless(error::already_responsed, f == 0);
+        slice user_address = in_msg_body~load_msg_addr();
+        storage::responses.udict_set(267, user_address, in_msg_body~load_dict());
+        storage::responses_count += 1;
+        ;; todo: which limit?
         return ();
     }
 
     if (op == op::assign_user) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
         throw_unless(error::invalid_status, storage::status == status::active);
-
-        ;; TODO: Take price from customer
-
-        storage::status = status::in_proggess;
+        storage::price = in_msg_body~load_coins();
+        storage::deadline = in_msg_body~load_uint(32);
         storage::freelancer_address = in_msg_body~load_msg_addr();
+        in_msg_body.end_parse();
+        storage::status = status::waiting_freelancer;
+        save_data();
+        return ();
+    }
+
+    if (op == op::accept_order) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::freelancer_address));
+        throw_unless(error::invalid_status, storage::status == status::waiting_freelancer);
+        throw_unless(error::not_enough_ton, msg_value >= (storage::price + fee::assign_user));
+        storage::status = status::in_progress;
+
+        int protocol_fee = storage::price * storage::protocol_fee_numerator / storage::protocol_fee_denominator;
+        cell body = begin_cell()
+            .store_uint(op::order_fee, 32)
+            .store_uint(query_id, 64)
+            .store_uint(storage::index, 64)
+            .end_cell();
+        messages::send_simple_non_bounceable(storage::master_address, protocol_fee, null(), body, 1);
+        storage::responses = null();
+        storage::responses_count = 0;
+        save_data();
+        return ();
+    }
+
+    if (op == op::reject_order) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::freelancer_address));
+        throw_unless(error::invalid_status, storage::status == status::active);
+        messages::send_simple_non_bounceable(storage::master_address, storage::price, null(), null(), 1);
+        storage::status = status::active;
+        save_data();
+        return ();
+    }
+
+    if (op == op::cancel_assign) {
+        throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
+        throw_unless(error::invalid_status, storage::status == status::active);
+        messages::send_simple_non_bounceable(storage::master_address, storage::price, null(), null(), 1);
+        storage::status = status::active;
         save_data();
         return ();
     }
 
     if (op == op::complete_order) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::freelancer_address));
-        throw_unless(error::invalid_status, storage::status == status::in_proggess);
+        throw_unless(error::invalid_status, storage::status == status::in_progress);
         storage::status = status::fulfilled;
         save_data();
         return ();
@@ -173,6 +234,8 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
                 .store_uint(slice_hash(caterogy), 256)
                 .end_cell();
             messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
+            storage::status = status::pre_arbitration;
+            save_data();
             return ();
         }
 
@@ -182,6 +245,9 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
             .end_cell();
         messages::send_simple_non_bounceable(storage::freelancer_address, storage::price, null(), body, 1);
         messages::send_simple_non_bounceable(storage::customer_address, 0, null(), body, 128);
+
+        ;; TODO: add notification to master
+
         return ();
     }
 
@@ -199,7 +265,6 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         throw_unless(error::invalid_status, storage::status == status::on_arbitration);
         int admin_category = in_msg_body~load_uint(256);
         validate_caterogy(admin_category);
-        ;; TODO: Implement. From admins
 
         storage::freelancer_part += in_msg_body~load_uint(8);
         storage::customer_part += in_msg_body~load_uint(8);

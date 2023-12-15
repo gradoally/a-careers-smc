@@ -1,5 +1,5 @@
 ;; --------------- Order ---------------
-
+const int fee::assign_user = 1;
 
 
 
@@ -10,6 +10,7 @@ const int fee::admin_creation = 1; ;; TODO: Change
 ;; --------------- User ---------------
 
 const int fee::order_creation = 1;
+const int protocol_fee::order_creation = 1000000000; ;; 1 TON
 
 
 ;; --------------- Admin ---------------

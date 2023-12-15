@@ -42,6 +42,11 @@ global cell storage::content;
     );
 }
 
+int get_category() {
+    (slice category, _) = storage::content.udict_get?(256, "category"H);
+    return slice_hash(category);
+}
+
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     slice cs = in_msg_full.begin_parse();
     int flags = in_msg_full~load_uint(4);
@@ -66,7 +71,14 @@ global cell storage::content;
         throw_unless(error:unauthorized, storage::revoked_at == 0);
         if (op == op::activate_order_admin) {
             throw_unless(error::not_enough_ton, msg_value >= fee::order_activation);
-            ;; TODO: Implement
+            cell body = begin_cell()
+                .store_uint(op::activate_order_master, 32)
+                .store_uint(query_id, 64)
+                .store_uint(storage::index, 64)
+                .store_uint(get_category(), 256)
+                .end_cell();
+
+            messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);
             return ();
         }
 
@@ -82,18 +94,33 @@ global cell storage::content;
             int freelancer_part = in_msg_body~load_uint(8);
             int customer_part = in_msg_body~load_uint(8);
             throw_unless(error::invalid_parts, (freelancer_part + customer_part) == 100);
-            (slice caterogy, _) = storage::content.udict_get?(256, "caterogy"H);
             cell body = begin_cell()
                 .store_uint(op::process_arbitration_master, 32)
                 .store_uint(query_id, 64)
                 .store_uint(storage::index, 64)
-                .store_uint(slice_hash(caterogy), 256)
-                .store_uint(order_index, 64)
+                .store_uint(get_category(), 256)
                 .store_uint(freelancer_part, 8)
                 .store_uint(customer_part, 8)
+                .store_uint(order_index, 64)
                 .end_cell();
             messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
             return ();
+        }
+
+        if (op::create_admin) {
+            throw_unless(error::not_enough_ton, msg_value >= fee::admin_creation);
+            cell content = in_msg_body~load_dict();
+            slice admin_address = in_msg_body~load_msg_addr();
+            in_msg_body.end_parse();
+            cell body = begin_cell()
+                .store_uint(op::create_admin, 32)
+                .store_uint(query_id, 64)
+                .store_uint(storage::index, 64)
+                .store_uint(get_category(), 256)
+                .store_slice(admin_address)
+                .store_ref(content)
+                .end_cell();
+            messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);
         }
 
         throw(0xFFFF);

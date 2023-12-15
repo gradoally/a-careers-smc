@@ -10,3 +10,11 @@ const int error::invalid_status = 500;
 
 ;; --------------- Master ---------------
 const int error::invalid_parts = 405;
+
+;; --------------- Admin ---------------
+
+;; --------------- User ---------------
+
+const int error::not_freelancer = 600;
+const int error::already_responsed = 601;
+const int error::too_many_responsed = 602;
