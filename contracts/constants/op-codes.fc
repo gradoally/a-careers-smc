@@ -20,13 +20,19 @@ const int op::add_response_master = 8;
 const int op::process_arbitration_master = 9;
 const int op::create_order_master = 11;
 const int op::get_admins = 16;
-const int op::create_admin = 18;
+const int op::create_admin_master = 18;
+const int op::create_admin = 38;
 const int op::order_activate_notification = 19;
 const int op::revoke_admin_master = 22;
 const int op::revoke_user_master = 23;
 const int op::admin_revoked_notification = 26;
 const int op::activate_user_master = 27;
 const int op::order_fee = 33;
+const int op::create_category = 34;
+const int op::delete_category = 35;
+const int op::activate_category = 36;
+const int op::deactivate_category = 37;
+const int op::create_user = 39;
 
 ;; --------------- User ---------------
 

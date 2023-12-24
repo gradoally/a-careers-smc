@@ -1,13 +1,95 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
+import {
+    Address,
+    beginCell,
+    Builder,
+    Cell,
+    Contract,
+    contractAddress,
+    ContractProvider,
+    Dictionary,
+    DictionaryValue,
+    Sender,
+    SendMode,
+    Slice,
+    toNano,
+} from '@ton/core';
+import { OPCODES } from './Config';
+import { sha256Hash } from '../tests/utils/helpers';
 
-export type MasterConfig = {};
+export type MasterConfig = {
+    rootAddress: Address;
+    orderCode: Cell;
+    userCode: Cell;
+    adminCode: Cell;
+    feeNumerator: number;
+    feeDenominator: number;
+};
+
+export type Indexes = {
+    orderNextIndex: number;
+    userNextIndex: number;
+    adminNextIndex: number;
+};
+
+export type Codes = {
+    orderCode: Cell;
+    userCode: Cell;
+    adminCode: Cell;
+};
+
+export type CategoryValue = {
+    active: boolean;
+    adminCount: number;
+    activeOrderCount: number;
+    agreementPercentage: number;
+};
+
+export type MasterData = {
+    rootAddress: Address;
+    categories: Dictionary<bigint, CategoryValue> | undefined;
+    feeNumerator: number;
+    feeDenominator: number;
+};
+
+export function createCategoryValue(): DictionaryValue<CategoryValue> {
+    return {
+        serialize(src: CategoryValue, builder: Builder) {
+            builder.storeBit(src.active);
+            builder.storeUint(src.adminCount, 64);
+            builder.storeUint(src.activeOrderCount, 64);
+            builder.storeUint(src.agreementPercentage, 64);
+        },
+        parse: (src: Slice) => {
+            return {
+                active: src.loadBoolean(),
+                adminCount: src.loadUint(64),
+                activeOrderCount: src.loadUint(64),
+                agreementPercentage: src.loadUint(64),
+            };
+        },
+    };
+}
 
 export function masterConfigToCell(config: MasterConfig): Cell {
-    return beginCell().endCell();
+    const codes = beginCell().storeRef(config.orderCode).storeRef(config.userCode).storeRef(config.adminCode).endCell();
+
+    const indexes = beginCell().storeUint(0, 64).storeUint(0, 64).storeUint(0, 64).endCell();
+
+    return beginCell()
+        .storeAddress(config.rootAddress)
+        .storeRef(codes)
+        .storeRef(indexes)
+        .storeUint(0, 1)
+        .storeUint(config.feeNumerator, 8)
+        .storeUint(config.feeDenominator, 8)
+        .endCell();
 }
 
 export class Master implements Contract {
-    constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+    constructor(
+        readonly address: Address,
+        readonly init?: { code: Cell; data: Cell },
+    ) {}
 
     static createFromAddress(address: Address) {
         return new Master(address);
@@ -25,5 +107,124 @@ export class Master implements Contract {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell().endCell(),
         });
+    }
+
+    async sendCreateCategory(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        category: string,
+        agreementPercentage: number,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.CREATE_CATEGORY, 32)
+                .storeUint(queryID, 64)
+                .storeUint(sha256Hash(category), 256)
+                .storeUint(agreementPercentage, 64)
+                .endCell(),
+        });
+    }
+
+    async sendCreateAdmin(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        content: Cell,
+        adminAddress: Address,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.CREATE_ADMIN, 32)
+                .storeUint(queryID, 64)
+                .storeMaybeRef(content)
+                .storeAddress(adminAddress)
+                .endCell(),
+        });
+    }
+
+    async sendCreateUser(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        content: Cell,
+        userAddress: Address,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.CREATE_USER, 32)
+                .storeUint(queryID, 64)
+                .storeMaybeRef(content)
+                .storeAddress(userAddress)
+                .endCell(),
+        });
+    }
+
+    async getIndexes(provider: ContractProvider): Promise<Indexes> {
+        const result = await provider.get('get_indexes', []);
+
+        return {
+            orderNextIndex: result.stack.readNumber(),
+            userNextIndex: result.stack.readNumber(),
+            adminNextIndex: result.stack.readNumber(),
+        };
+    }
+
+    async getCodes(provider: ContractProvider): Promise<Codes> {
+        const result = await provider.get('get_codes', []);
+
+        return {
+            orderCode: result.stack.readCell(),
+            userCode: result.stack.readCell(),
+            adminCode: result.stack.readCell(),
+        };
+    }
+
+    async getCategoryData(provider: ContractProvider, category: string): Promise<CategoryValue> {
+        const result = await provider.get('get_category_data', [{ type: 'int', value: sha256Hash(category) }]);
+
+        return {
+            active: result.stack.readBoolean(),
+            adminCount: result.stack.readNumber(),
+            activeOrderCount: result.stack.readNumber(),
+            agreementPercentage: result.stack.readNumber(),
+        };
+    }
+
+    async getMasterData(provider: ContractProvider): Promise<MasterData> {
+        const result = await provider.get('get_master_data', []);
+
+        const rootAddress = result.stack.readAddress();
+        const categoriesDict = result.stack.readCellOpt();
+        const feeNumerator = result.stack.readNumber();
+        const feeDenominator = result.stack.readNumber();
+
+        if (categoriesDict) {
+            const categories = categoriesDict
+                .beginParse()
+                .loadDictDirect(Dictionary.Keys.BigUint(256), createCategoryValue());
+            return {
+                rootAddress,
+                categories,
+                feeNumerator,
+                feeDenominator,
+            };
+        }
+
+        return {
+            rootAddress,
+            categories: undefined,
+            feeNumerator,
+            feeDenominator,
+        };
     }
 }

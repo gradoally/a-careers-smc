@@ -24,6 +24,7 @@ global int storage::admin_voted_count;
 global int storage::freelancer_part;
 global int storage::customer_part;
 global int storage::admin_count;
+global int storage::agreement_perc;
 
 {-
 _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freelancer_address:MsgAddress
@@ -34,11 +35,11 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     slice ds = get_data().begin_parse();
 
     storage::index = ds~load_uint(64);
-    slice addresses = ds~load_ref().begin_parse();
-    storage::master_address = addresses~load_msg_addr();
+    storage::master_address = ds~load_msg_addr();
 
     if(slice_bits(ds) > 0) {
         storage::init? = true;
+        slice addresses = ds~load_ref().begin_parse();
         storage::customer_address = addresses~load_msg_addr();
         storage::freelancer_address = addresses~load_msg_addr();
         storage::content = ds~load_dict();
@@ -51,11 +52,12 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::admin_count = ds~load_uint(64);
         storage::responses_count = ds~load_uint(8);
 
-        cell arbitration_data = ds~load_ref();
+        slice arbitration_data = ds~load_ref().begin_parse();
         storage::admin_voted_count = arbitration_data~load_uint(64);
         storage::freelancer_part = arbitration_data~load_uint(8);
         storage::customer_part = arbitration_data~load_uint(8);
         storage::admin_count = arbitration_data~load_uint(64);
+        storage::agreement_perc = arbitration_data~load_uint(64);
     } else {
         storage::init? = false;
     }
@@ -67,15 +69,16 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         .store_uint(storage::freelancer_part, 8)
         .store_uint(storage::customer_part, 8)
         .store_uint(storage::admin_count, 64)
+        .store_uint(storage::agreement_perc, 64)
         .end_cell();
     cell addresses = begin_cell()
-        .store_slice(storage::master_address)
         .store_slice(storage::customer_address)
         .store_slice(storage::freelancer_address)
         .end_cell();
 
     set_data(begin_cell()
         .store_uint(storage::index, 64)
+        .store_slice(storage::master_address)
         .store_ref(addresses)
         .store_dict(storage::content)
         .store_coins(storage::price)
@@ -93,19 +96,19 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
 
 () validate_caterogy(int admin_category) impure inline_ref {
     if (admin_category != "all"H) {
-        (slice order_category, _) = storage::content.udict_get?(256, hash::category);
-        throw_unless(error::invalid_category, admin_category == slice_hash(order_category));
+        (cell order_category, _) = storage::content.udict_get_ref?(256, hash::category);
+        throw_unless(error::invalid_category, admin_category == order_category.begin_parse().preload_uint(256));
     }
 }
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     slice cs = in_msg_full.begin_parse();
-    int flags = in_msg_full~load_uint(4);
-    slice sender_address = in_msg_full~load_msg_addr();
+    int flags = cs~load_uint(4);
+    slice sender_address = cs~load_msg_addr();
     ;; support bounce?
 
     load_data();
-    if (storage::init?) {
+    if (~ storage::init?) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         storage::customer_address = in_msg_body~load_msg_addr();
         storage::freelancer_address = addr_none;
@@ -118,6 +121,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::responses_count = 0;
         storage::status = status::moderation;
         storage::admin_count = 0;
+        storage::agreement_perc = 0;
 
         storage::admin_voted_count = 0;
         storage::freelancer_part = 0;
@@ -136,8 +140,8 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         validate_caterogy(admin_category);
         storage::status = status::active;
 
-        (slice category, _) = storage::content.udict_get?(256, hash::category);
-        int category_hash = slice_hash(category);
+        (cell category, _) = storage::content.udict_get_ref?(256, hash::category);
+        int category_hash = category.begin_parse().preload_uint(256);
         cell body = begin_cell()
             .store_uint(op::order_activate_notification, 32)
             .store_uint(query_id, 64)
@@ -153,12 +157,12 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::active);
         throw_unless(error::too_many_responsed, storage::responses_count < const::max_responses);
-        (_, int f) = storage::responses.udict_get?(267, sender_address);
-        throw_unless(error::already_responsed, f == 0);
         slice user_address = in_msg_body~load_msg_addr();
-        storage::responses.udict_set(267, user_address, in_msg_body~load_dict());
+        (_, int f) = storage::responses.dict_get?(267, user_address);
+        throw_unless(error::already_responsed, f == false);
+        storage::responses~dict_set_builder(267, user_address, begin_cell());
         storage::responses_count += 1;
-        ;; todo: which limit?
+        save_data();
         return ();
     }
 
@@ -169,6 +173,8 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::deadline = in_msg_body~load_uint(32);
         storage::freelancer_address = in_msg_body~load_msg_addr();
         in_msg_body.end_parse();
+        (_, int f) = storage::responses.dict_get?(267, storage::freelancer_address);
+        throw_unless(error::freelancer_not_found, f == true);
         storage::status = status::waiting_freelancer;
         save_data();
         return ();
@@ -270,7 +276,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::customer_part += in_msg_body~load_uint(8);
         storage::admin_voted_count += 1;
 
-        if((storage::admin_voted_count * const::scale_factor / storage::admin_count) >= const::agreement_perc) {
+        if((storage::admin_voted_count * const::scale_factor / storage::admin_count) >= storage::agreement_perc) {
             int customer_part = storage::price * storage::freelancer_part / storage::admin_voted_count / 100;
             int freelancer_part = storage::price - customer_part;
             cell body = begin_cell()
@@ -295,4 +301,22 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
 
         return ();
     }
+}
+
+(int, int, slice, int, int, int, slice, slice, cell) get_order_data() method_id {
+    load_data();
+    return (storage::init?, storage::index, storage::master_address,
+        storage::status, storage::price, storage::deadline, storage::customer_address,
+        storage::freelancer_address, storage::content);
+}
+
+(int, int, int, int, int) get_arbitration_data() method_id {
+    load_data();
+    return (storage::admin_voted_count, storage::freelancer_part, storage::customer_part,
+        storage::admin_count, storage::agreement_perc);
+}
+
+(cell, int) get_responses() method_id {
+    load_data();
+    return (storage::responses, storage::responses_count);
 }

@@ -9,7 +9,7 @@ global int storage::init?;
 global int storage::index;
 global slice storage::master_address;
 global slice storage::admin_address;
-global slice storage::revoked_at;
+global int storage::revoked_at;
 global cell storage::content;
 
 () load_data() impure {
@@ -43,22 +43,22 @@ global cell storage::content;
 }
 
 int get_category() {
-    (slice category, _) = storage::content.udict_get?(256, "category"H);
-    return slice_hash(category);
+    (cell category, _) = storage::content.udict_get_ref?(256, "category"H);
+    return category.begin_parse().preload_uint(256);
 }
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     slice cs = in_msg_full.begin_parse();
-    int flags = in_msg_full~load_uint(4);
-    slice sender_address = in_msg_full~load_msg_addr();
+    int flags = cs~load_uint(4);
+    slice sender_address = cs~load_msg_addr();
     ;; support bounce?
 
     load_data();
-    if (storage::init?) {
+    if (~ storage::init?) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         storage::admin_address = in_msg_body~load_msg_addr();
-        storage::revoked_at = 0;
         storage::content = in_msg_body~load_dict();
+        storage::revoked_at = 0;
         save_data();
         return ();
     }
@@ -69,13 +69,16 @@ int get_category() {
 
     if(equal_slices(sender_address, storage::admin_address)) {
         throw_unless(error:unauthorized, storage::revoked_at == 0);
+
         if (op == op::activate_order_admin) {
             throw_unless(error::not_enough_ton, msg_value >= fee::order_activation);
+            int order_index = in_msg_body~load_uint(64);
             cell body = begin_cell()
                 .store_uint(op::activate_order_master, 32)
                 .store_uint(query_id, 64)
                 .store_uint(storage::index, 64)
                 .store_uint(get_category(), 256)
+                .store_uint(order_index, 64)
                 .end_cell();
 
             messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);
@@ -84,7 +87,16 @@ int get_category() {
 
         if (op == op::activate_user_admin) {
             throw_unless(error::not_enough_ton, msg_value >= fee::user_activation);
-            ;; TODO: Implement
+            int user_index = in_msg_body~load_uint(64);
+            in_msg_body.end_parse();
+            cell body = begin_cell()
+                .store_uint(op::activate_user_master, 32)
+                .store_uint(query_id, 64)
+                .store_uint(storage::index, 64)
+                .store_uint(get_category(), 256)
+                .store_uint(user_index, 64)
+                .end_cell();
+            messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);
             return ();
         }
 
@@ -107,20 +119,21 @@ int get_category() {
             return ();
         }
 
-        if (op::create_admin) {
+        if (op == op::create_admin) {
             throw_unless(error::not_enough_ton, msg_value >= fee::admin_creation);
             cell content = in_msg_body~load_dict();
             slice admin_address = in_msg_body~load_msg_addr();
             in_msg_body.end_parse();
             cell body = begin_cell()
-                .store_uint(op::create_admin, 32)
+                .store_uint(op::create_admin_master, 32)
                 .store_uint(query_id, 64)
                 .store_uint(storage::index, 64)
                 .store_uint(get_category(), 256)
+                .store_dict(content)
                 .store_slice(admin_address)
-                .store_ref(content)
                 .end_cell();
             messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);
+            return ();
         }
 
         throw(0xFFFF);
@@ -146,4 +159,9 @@ int get_category() {
 
         throw(0xFFFF);
     }
+}
+
+(int, int, slice, slice, int, cell) get_admin_data() method_id {
+    load_data();
+    return (storage::init?, storage::index, storage::master_address, storage::admin_address, storage::revoked_at, storage::content);
 }

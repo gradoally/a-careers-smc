@@ -6,8 +6,7 @@ builder store_maybe_state_init(builder b, cell c) impure asm """
     ISNULL // b c ?
     IF:<{ // b c
         DROP // b
-        2 PUSHINT // b 2
-        STZEROES // b'
+        STZERO // b'
     }>ELSE<{ // b c
         SWAP // c b
         2 PUSHINT // c b 2

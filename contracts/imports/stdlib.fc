@@ -626,3 +626,5 @@ builder store_builder(builder to, builder from) asm "STBR";
 
 builder store_true(builder b) impure asm "STONE";
 builder store_false(builder b) impure asm "STZERO";
+
+(slice, int) dict_get?(cell dict, int key_len, slice index) asm(index dict key_len) "DICTGET" "NULLSWAPIFNOT";

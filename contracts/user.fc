@@ -9,7 +9,7 @@ global int storage::init?;
 global int storage::index;
 global slice storage::master_address;
 global slice storage::user_address;
-global slice storage::revoked_at;
+global int storage::revoked_at;
 global cell storage::content;
 
 () load_data() impure {
@@ -44,16 +44,16 @@ global cell storage::content;
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     slice cs = in_msg_full.begin_parse();
-    int flags = in_msg_full~load_uint(4);
-    slice sender_address = in_msg_full~load_msg_addr();
+    int flags = cs~load_uint(4);
+    slice sender_address = cs~load_msg_addr();
     ;; support bounce?
 
     load_data();
-    if (storage::init?) {
+    if (~ storage::init?) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         storage::user_address = in_msg_body~load_msg_addr();
-        storage::revoked_at = -1;
         storage::content = in_msg_body~load_dict();
+        storage::revoked_at = 1;
         save_data();
         return ();
     }
@@ -63,8 +63,8 @@ global cell storage::content;
 
     if(equal_slices(sender_address, storage::user_address)) {
         throw_unless(error:unauthorized, storage::revoked_at == 0);
+
         if (op == op::create_order) {
-            throw_unless(error::not_enough_ton, msg_value >= fee::order_creation);
             cell content = in_msg_body~load_dict();
             int price = in_msg_body~load_coins();
             int deadline = in_msg_body~load_uint(32);
@@ -73,8 +73,8 @@ global cell storage::content;
                 .store_uint(op::create_order_master, 32)
                 .store_uint(query_id, 64)
                 .store_uint(storage::index, 64)
-                .store_slice(storage::user_address)
                 .store_dict(content)
+                .store_slice(storage::user_address)
                 .store_coins(price)
                 .store_uint(deadline, 32)
                 .end_cell();
@@ -84,8 +84,8 @@ global cell storage::content;
         }
 
         if (op == op::add_response_user) {
-            (slice is_freelancer?, _) = storage::content.udict_get?(256, "is_freelancer");
-            throw_unless(error::not_freelancer, is_freelancer?.preload_int(1));
+            (cell is_freelancer?, _) = storage::content.udict_get_ref?(256, "is_freelancer"H);
+            throw_unless(error::not_freelancer, is_freelancer?.begin_parse().preload_int(1));
             int order_id = in_msg_body~load_uint(64);
 
             cell body = begin_cell()
@@ -104,6 +104,7 @@ global cell storage::content;
 
     if(equal_slices(sender_address, storage::master_address)) {
         if (op == op::activate_user) {
+            throw_unless(error:unauthorized, storage::revoked_at == 1);
             storage::revoked_at = 0;
             save_data();
             return ();
@@ -122,4 +123,9 @@ global cell storage::content;
     }
 
     throw(error:unauthorized);
+}
+
+(int, int, slice, slice, int, cell) get_user_data() method_id {
+    load_data();
+    return (storage::init?, storage::index, storage::master_address, storage::user_address, storage::revoked_at, storage::content);
 }

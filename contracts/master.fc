@@ -1,11 +1,3 @@
-#include "imports/stdlib.fc";
-#include "constants/constants.fc";
-#include "constants/op-codes.fc";
-#include "constants/errors.fc";
-#include "constants/fees.fc";
-#include "logic/utils.fc";
-#include "logic/messages.fc";
-
 global slice storage::root_address;
 
 global cell storage::order_code;
@@ -24,8 +16,18 @@ global int category::active;
 global int category::admin_count;
 global int category::active_order_count;
 global int category::hash;
+global int category::agreement_perc;
 
 global slice msg::sender_address;
+
+#include "imports/stdlib.fc";
+#include "constants/constants.fc";
+#include "constants/op-codes.fc";
+#include "constants/errors.fc";
+#include "constants/fees.fc";
+#include "logic/utils.fc";
+#include "logic/messages.fc";
+#include "logic/master-utils.fc";
 
 {-
 _ order_code:^Cell user_code:^Cell admin_code:^Cell = Codes;
@@ -44,11 +46,13 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     storage::admin_code = codes~load_ref();
 
     slice indexes = ds~load_ref().begin_parse();
-    storage::order_next_index = indexes~load_uint(32);
-    storage::user_next_index = indexes~load_uint(32);
-    storage::admin_next_index = indexes~load_uint(32);
+    storage::order_next_index = indexes~load_uint(64);
+    storage::user_next_index = indexes~load_uint(64);
+    storage::admin_next_index = indexes~load_uint(64);
 
     storage::categories = ds~load_dict();
+    storage::fee_numerator = ds~load_uint(8);
+    storage::fee_denominator = ds~load_uint(8);
 }
 
 () save_data() impure {
@@ -59,9 +63,9 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         .end_cell();
 
     cell indexes = begin_cell()
-        .store_uint(storage::order_next_index, 32)
-        .store_uint(storage::user_next_index, 32)
-        .store_uint(storage::admin_next_index, 32)
+        .store_uint(storage::order_next_index, 64)
+        .store_uint(storage::user_next_index, 64)
+        .store_uint(storage::admin_next_index, 64)
         .end_cell();
 
     cell data = begin_cell()
@@ -69,53 +73,21 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         .store_ref(codes)
         .store_ref(indexes)
         .store_dict(storage::categories)
-
+        .store_uint(storage::fee_numerator, 8)
+        .store_uint(storage::fee_denominator, 8)
         .end_cell();
 
     set_data(data);
 }
 
-() load_category_data(int category_hash) impure inline {
-    (slice category_value, int f) = storage::categories.udict_get?(256, category_hash);
-    throw_unless(error::invalid_category, f == true);
-
-    category::hash = category_hash;
-    category::active = category_value~load_int(1);
-    category::admin_count = category_value~load_uint(64);
-    category::active_order_count = category_value~load_uint(64);
-}
-
-() save_category_data() impure inline {
-    slice category_data = begin_cell()
-        .store_int(category::active, 1)
-        .store_uint(category::admin_count, 64)
-        .store_uint(category::active_order_count, 64)
-        .end_cell()
-        .begin_parse();
-
-    storage::categories~udict_set(256, category::hash, category_data);
-}
-
-(slice, int) from_admin?(in_msg_body) impure {
-    if (equal_slices(msg::sender_address, storage::root_address)) {
-        return (in_msg_body, -1);
-    }
-
-    int admin_index = in_msg_body~load_uint(64);
-    throw_unless(error:unauthorized, equal_slices(msg::sender_address,
-        calculate_contract_address(calculate_contract_state_init(admin_index, storage::admin_code))));
-    if (in_msg_body~load_uint(256) == "all"H) {
-        return (in_msg_body, 1);
-    }
-
-    return (in_msg_body, 0);
-}
-
-
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if(in_msg_body.slice_bits() < 32) {
+        return();
+    }
+
     slice cs = in_msg_full.begin_parse();
-    int flags = in_msg_full~load_uint(4);
-    msg::sender_address = in_msg_full~load_msg_addr();
+    int flags = cs~load_uint(4);
+    msg::sender_address = cs~load_msg_addr();
     ;; support bounce?
 
     load_data();
@@ -124,36 +96,45 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
 
     ;; TODO: List of available categories? Validate category on order creation?
 
-    ;; --------------- Interactions with admin ---------------
-    if (op == op::create_admin) {
-        (in_msg_body, int admin?) = from_admin?(in_msg_body);
-        throw_unless(error:unauthorized, admin?);
-        throw_unless(error::not_enough_ton, msg_value >= fee::admin_creation);
-        cell content = in_msg_body~load_dict();
-        if (admin? == 1) {
-            ;; todo: check categories
-            (slice category, int f) = content.udict_get?(256, hash::category);
-            throw_unless(error::invalid_content, f == true);
-            throw_unless(error:unauthorized, slice_hash(category) != "all"H);
-        }
-        slice admin_address = in_msg_body~load_msg_addr();
+    if (op == op::create_category) {
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
+        category::hash = in_msg_body~load_uint(256);
+        category::agreement_perc = in_msg_body~load_uint(64);
         in_msg_body.end_parse();
 
-        (slice admin_caterogy, int f) = content.udict_get?(256, hash::category);
-        throw_unless(error::invalid_content, f == true);
-        int category_hash = slice_hash(admin_caterogy);
-
-        load_category_data(category_hash);
-        category::admin_count += 1;
+        (_, int f) = storage::categories.udict_get?(256, category::hash);
+        throw_unless(error::category_already_exist, f == false);
+        category::active = true;
+        category::admin_count = 0;
+        category::active_order_count = 0;
         save_category_data();
+        save_data();
+        return ();
+    }
 
-        cell admin_state_init = calculate_contract_state_init(storage::admin_next_index, storage::admin_code);
-        cell admin_contract_address = calculate_contract_address(admin_state_init);
-        cell body = begin_cell()
-            .store_slice(admin_address)
-            .store_dict(content)
-            .end_cell();
-        messages::send_simple_bounceable(admin_contract_address, 0, admin_state_init, body, 64);
+    ;; --------------- Interactions with admin ---------------
+    if (op == op::create_admin) {
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
+        throw_unless(error::not_enough_ton, msg_value >= fee::admin_creation);
+        cell content = in_msg_body~load_dict();
+        slice admin_address = in_msg_body~load_msg_addr();
+        in_msg_body.end_parse();
+        create_admin(content, admin_address, true);
+        storage::admin_next_index += 1;
+        save_data();
+        return ();
+    }
+
+    if (op == op::create_admin_master) {
+        int admin_index = in_msg_body~load_uint(64);
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address,
+            calculate_contract_address(calculate_contract_state_init(admin_index, storage::admin_code))));
+        throw_unless(error:unauthorized, in_msg_body~load_uint(256) == "all"H);
+        cell content = in_msg_body~load_dict();
+        slice admin_address = in_msg_body~load_msg_addr();
+        in_msg_body.end_parse();
+        create_admin(content, admin_address, false);
+        storage::admin_next_index += 1;
         save_data();
         return ();
     }
@@ -162,7 +143,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
         int admin_index = in_msg_body~load_uint(64);
         cell admin_state_init = calculate_contract_state_init(admin_index, storage::admin_code);
-        cell admin_contract_address = calculate_contract_address(admin_state_init);
+        slice admin_contract_address = calculate_contract_address(admin_state_init);
 
         ;; TODO: implement
         return ();
@@ -180,6 +161,25 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         return ();
     }
 
+    if (op == op::create_user) {
+        cell content = in_msg_body~load_dict();
+        slice user_address = in_msg_body~load_msg_addr();
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, user_address));
+        in_msg_body.end_parse();
+        ;; TODO: Check for existing fields
+        int user_index = storage::user_next_index;
+        cell user_state_init = calculate_contract_state_init(user_index, storage::user_code);
+        slice user_contract_address = calculate_contract_address(user_state_init);
+        cell body = begin_cell()
+            .store_slice(user_address)
+            .store_dict(content)
+            .end_cell();
+        messages::send_simple_bounceable(user_contract_address, 0, user_state_init, body, 128);
+        storage::user_next_index += 1;
+        save_data();
+        return ();
+    }
+
 
     ;; --------------- Interactions with user ---------------
     if (op == op::create_order_master) {
@@ -191,14 +191,14 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         raw_reserve(protocol_fee::order_creation, 4);
 
         cell content = in_msg_body~load_dict();
-        (slice admin_caterogy, int f) = content.udict_get?(256, hash::category);
+        (cell admin_caterogy, int f) = content.udict_get_ref?(256, hash::category);
         throw_unless(error::invalid_content, f == true);
-        int category_hash = slice_hash(admin_caterogy);
+        int category_hash = admin_caterogy.begin_parse().preload_uint(256);
         load_category_data(category_hash);
         throw_unless(error::invalid_category, category::active == true);
 
         cell order_state_init = calculate_contract_state_init(storage::order_next_index, storage::order_code);
-        cell order_address = calculate_contract_address(order_state_init);
+        slice order_address = calculate_contract_address(order_state_init);
 
         slice customer_address = in_msg_body~load_msg_addr();
         int price = in_msg_body~load_coins();
@@ -222,7 +222,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         throw_unless(error:unauthorized, equal_slices(msg::sender_address,
             calculate_contract_address(calculate_contract_state_init(user_index, storage::user_code))));
         cell user_state_init = calculate_contract_state_init(user_index, storage::user_code);
-        cell user_contract_address = calculate_contract_address(user_state_init);
+        slice user_contract_address = calculate_contract_address(user_state_init);
 
         ;; TODO: Implement
 
@@ -233,8 +233,9 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         int admin_index = in_msg_body~load_uint(64);
         throw_unless(error:unauthorized, equal_slices(msg::sender_address,
             calculate_contract_address(calculate_contract_state_init(admin_index, storage::admin_code))));
+        in_msg_body~skip_bits(256);
         int user_index = in_msg_body~load_uint(64);
-        cell user_contract_address = calculate_contract_address(calculate_contract_state_init(user_index, storage::user_code));
+        slice user_contract_address = calculate_contract_address(calculate_contract_state_init(user_index, storage::user_code));
         cell body = begin_cell()
             .store_uint(op::activate_user, 32)
             .store_uint(query_id, 64)
@@ -250,9 +251,9 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         int admin_index = in_msg_body~load_uint(64);
         throw_unless(error:unauthorized, equal_slices(msg::sender_address,
                 calculate_contract_address(calculate_contract_state_init(admin_index, storage::admin_code))));
+        int category_hash = in_msg_body~load_uint(256);
         int order_index = in_msg_body~load_uint(64);
         slice order_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
-        int category_hash = in_msg_body~load_uint(256);
         in_msg_body.end_parse();
 
         cell body = begin_cell()
@@ -268,7 +269,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         int order_index = in_msg_body~load_uint(64);
         throw_unless(error:unauthorized, equal_slices(msg::sender_address,
             calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code))));
-        int category_hash = in_msg_body~load_uint(64);
+        int category_hash = in_msg_body~load_uint(256);
         load_category_data(category_hash);
         category::active_order_count += 1;
         save_category_data();
@@ -281,7 +282,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         throw_unless(error:unauthorized, equal_slices(msg::sender_address,
             calculate_contract_address(calculate_contract_state_init(user_index, storage::user_code))));
         int order_index = in_msg_body~load_uint(64);
-        cell order_contract_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
+        slice order_contract_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
         slice user_address = in_msg_body~load_msg_addr();
         cell body = begin_cell()
             .store_uint(op::add_response, 32)
@@ -301,7 +302,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         int freelancer_part = in_msg_body~load_uint(8);
         int customer_part = in_msg_body~load_uint(8);
         int order_index = in_msg_body~load_uint(64);
-        cell order_contract_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
+        slice order_contract_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
         in_msg_body.end_parse();
 
         cell body = begin_cell()
@@ -325,6 +326,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
             .store_uint(op::set_admins, 32)
             .store_uint(query_id, 64)
             .store_uint(category::admin_count, 64)
+            .store_uint(category::agreement_perc, 64)
             .end_cell();
 
         messages::send_simple_bounceable(msg::sender_address, 0, null(), body, 64);
@@ -366,4 +368,26 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     }
 
     throw(0xFFFF);
+}
+
+
+(int, int, int) get_indexes() method_id {
+    load_data();
+    return (storage::order_next_index, storage::user_next_index, storage::admin_next_index);
+}
+
+(cell, cell, cell) get_codes() method_id {
+    load_data();
+    return (storage::order_code, storage::user_code, storage::admin_code);
+}
+
+(int, int, int, int) get_category_data(int category_hash) method_id {
+    load_data();
+    load_category_data(category_hash);
+    return (category::active, category::admin_count, category::active_order_count, category::agreement_perc);
+}
+
+(slice, cell, int, int) get_master_data() method_id {
+    load_data();
+    return (storage::root_address, storage::categories, storage::fee_numerator, storage::fee_denominator);
 }

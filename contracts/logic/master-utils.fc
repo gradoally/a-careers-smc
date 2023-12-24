@@ -1,0 +1,47 @@
+#include "../constants/errors.fc";
+#include "../master.fc";
+#include "utils.fc";
+#include "messages.fc";
+
+() load_category_data(int category_hash) impure inline {
+    (slice category_value, int f) = storage::categories.udict_get?(256, category_hash);
+    throw_unless(error::invalid_category, f == true);
+
+    category::hash = category_hash;
+    category::active = category_value~load_int(1);
+    category::admin_count = category_value~load_uint(64);
+    category::active_order_count = category_value~load_uint(64);
+    category::agreement_perc = category_value~load_uint(64);
+}
+
+() save_category_data() impure inline {
+    slice category_data = begin_cell()
+    .store_int(category::active, 1)
+    .store_uint(category::admin_count, 64)
+    .store_uint(category::active_order_count, 64)
+    .store_uint(category::agreement_perc, 64)
+    .end_cell()
+    .begin_parse();
+
+    storage::categories~udict_set(256, category::hash, category_data);
+}
+
+() create_admin(cell content, slice admin_address, int root?) impure inline {
+    (cell admin_caterogy, int f) = content.udict_get_ref?(256, hash::category);
+    if (~ root?) {
+        int category_hash = admin_caterogy.begin_parse().preload_uint(256);
+        throw_unless(error:unauthorized, category_hash != "all"H);
+    }
+    throw_unless(error::invalid_content, f == true);
+    load_category_data(admin_caterogy.begin_parse().preload_uint(256));
+    category::admin_count += 1;
+    save_category_data();
+
+    cell admin_state_init = calculate_contract_state_init(storage::admin_next_index, storage::admin_code);
+    slice admin_contract_address = calculate_contract_address(admin_state_init);
+    cell body = begin_cell()
+    .store_slice(admin_address)
+    .store_dict(content)
+    .end_cell();
+    messages::send_simple_bounceable(admin_contract_address, 0, admin_state_init, body, 64);
+}
