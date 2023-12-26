@@ -1,9 +1,19 @@
 import { beginCell, Builder, Cell, Dictionary, Slice } from '@ton/core';
 import { sha256Hash } from './helpers';
 
-export function buildAdminContent(category: string): Cell {
+export type AdminData = {
+    category: string;
+    canApproveUser: boolean;
+    canRevokeUser: boolean;
+};
+
+export type ResponseData = {
+    text: string;
+};
+
+export function buildAdminContent(data: AdminData): Cell {
     const content = Dictionary.empty<bigint, Cell>();
-    content.set(sha256Hash('category'), beginCell().storeUint(sha256Hash(category), 256).endCell());
+    content.set(sha256Hash('category'), beginCell().storeUint(sha256Hash(data.category), 256).endCell());
 
     return beginCell().storeDictDirect(content, Dictionary.Keys.BigUint(256), Dictionary.Values.Cell()).endCell();
 }
@@ -19,6 +29,13 @@ export function buildUserContent(isUser: boolean, isFreelancer: boolean): Cell {
 export function buildOrderContent(category: string): Cell {
     const content = Dictionary.empty<bigint, Cell>();
     content.set(sha256Hash('category'), beginCell().storeUint(sha256Hash(category), 256).endCell());
+
+    return beginCell().storeDictDirect(content, Dictionary.Keys.BigUint(256), Dictionary.Values.Cell()).endCell();
+}
+
+export function buildResponseContent(data: ResponseData): Cell {
+    const content = Dictionary.empty<bigint, Cell>();
+    content.set(sha256Hash('text'), beginCell().storeStringTail(data.text).endCell());
 
     return beginCell().storeDictDirect(content, Dictionary.Keys.BigUint(256), Dictionary.Values.Cell()).endCell();
 }

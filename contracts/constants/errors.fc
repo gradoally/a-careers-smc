@@ -5,8 +5,8 @@ const int error::not_enough_ton = 404;
 const int error::already_revoked = 406;
 
 ;; --------------- Order ---------------
-const int error::invalid_status = 500;
-const int error::freelancer_not_found = 501;
+const int error::invalid_status = 501;
+const int error::freelancer_not_found = 502;
 
 ;; --------------- Master ---------------
 const int error::invalid_parts = 701;
@@ -21,6 +21,6 @@ const int error::category_already_inactive = 706;
 
 ;; --------------- User ---------------
 
-const int error::not_freelancer = 600;
-const int error::already_responsed = 601;
-const int error::too_many_responsed = 602;
+const int error::not_freelancer = 601;
+const int error::already_responded = 602;
+const int error::too_many_responded = 603;

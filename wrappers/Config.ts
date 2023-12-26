@@ -1,32 +1,3 @@
-/*
-const int error:unauthorized = 401;
-const int error::invalid_category = 402;
-const int error::invalid_content = 403;
-const int error::not_enough_ton = 404;
-const int error::already_revoked = 406;
-
-;; --------------- Order ---------------
-const int error::invalid_status = 500;
-
-
-;; --------------- Master ---------------
-const int error::invalid_parts = 701;
-const int error::category_already_exist = 702;
-const int error::category_not_exist = 703;
-const int error::deletion_not_allowed = 704;
-const int error::category_already_active = 705;
-const int error::category_already_inactive = 706;
-
-
-;; --------------- Admin ---------------
-
-;; --------------- User ---------------
-
-const int error::not_freelancer = 600;
-const int error::already_responsed = 601;
-const int error::too_many_responsed = 602;
- */
-
 export const OPCODES = {
     ACTIVATE_ORDER: 1,
     ADD_RESPONSE: 2,
@@ -78,8 +49,8 @@ export const ERRORS = {
     NOT_ENOUGH_TON: 404,
     ALREADY_REVOKED: 406,
 
-    INVALID_STATUS: 500,
-    FREELANCER_NOT_FOUND: 501,
+    INVALID_STATUS: 501,
+    FREELANCER_NOT_FOUND: 502,
 
     INVALID_PARTS: 701,
     CATEGORY_ALREADY_EXIST: 702,
@@ -88,7 +59,7 @@ export const ERRORS = {
     CATEGORY_ALREADY_ACTIVE: 705,
     CATEGORY_ALREADY_INACTIVE: 706,
 
-    NOT_FREELANCER: 600,
-    ALREADY_RESPONSED: 601,
-    TOO_MANY_RESPONSED: 602,
+    NOT_FREELANCER: 601,
+    ALREADY_RESPONDED: 602,
+    TOO_MANY_RESPONDED: 603,
 };

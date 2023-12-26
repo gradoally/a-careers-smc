@@ -72,7 +72,14 @@ export class User implements Contract {
         });
     }
 
-    async sendAddResponse(provider: ContractProvider, via: Sender, value: bigint, queryID: number, orderIndex: number) {
+    async sendAddResponse(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        orderIndex: number,
+        content: Cell,
+    ) {
         await provider.internal(via, {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
@@ -80,6 +87,7 @@ export class User implements Contract {
                 .storeUint(OPCODES.ADD_RESPONSE_USER, 32)
                 .storeUint(queryID, 64)
                 .storeUint(orderIndex, 64)
+                .storeRef(content)
                 .endCell(),
         });
     }

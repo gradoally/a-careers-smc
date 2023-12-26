@@ -284,43 +284,24 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         int order_index = in_msg_body~load_uint(64);
         slice order_contract_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
         slice user_address = in_msg_body~load_msg_addr();
+        cell content = in_msg_body~load_ref();
         cell body = begin_cell()
             .store_uint(op::add_response, 32)
             .store_uint(query_id, 64)
             .store_slice(user_address)
+            .store_ref(content)
             .end_cell();
 
         messages::send_simple_bounceable(order_contract_address, 0, null(), body, 64);
         return ();
     }
 
-    if (op == op::process_arbitration_master) {
-        int admin_index = in_msg_body~load_uint(64);
-        throw_unless(error:unauthorized, equal_slices(msg::sender_address,
-            calculate_contract_address(calculate_contract_state_init(admin_index, storage::admin_code))));
-        int admin_category_hash = in_msg_body~load_uint(256);
-        int freelancer_part = in_msg_body~load_uint(8);
-        int customer_part = in_msg_body~load_uint(8);
-        int order_index = in_msg_body~load_uint(64);
-        slice order_contract_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
-        in_msg_body.end_parse();
-
-        cell body = begin_cell()
-            .store_uint(op::process_arbitration, 32)
-            .store_uint(query_id, 64)
-            .store_uint(admin_category_hash, 256)
-            .store_uint(freelancer_part, 8)
-            .store_uint(customer_part, 8)
-            .end_cell();
-        messages::send_simple_bounceable(order_contract_address, 0, null(), body, 64);
-        return ();
-    }
 
     if (op == op::get_admins) {
         int order_index = in_msg_body~load_uint(64);
         throw_unless(error:unauthorized, equal_slices(msg::sender_address,
             calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code))));
-        int category_hash = in_msg_body~load_uint(64);
+        int category_hash = in_msg_body~load_uint(256);
         load_category_data(category_hash);
         cell body = begin_cell()
             .store_uint(op::set_admins, 32)
@@ -337,14 +318,20 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         int admin_index = in_msg_body~load_uint(64);
         throw_unless(error:unauthorized, equal_slices(msg::sender_address,
             calculate_contract_address(calculate_contract_state_init(admin_index, storage::admin_code))));
+        int admin_category_hash = in_msg_body~load_uint(256);
         int order_index = in_msg_body~load_uint(64);
-        int freelancer_part = in_msg_body~load_uint(8);
         int customer_part = in_msg_body~load_uint(8);
-
-
+        int freelancer_part = in_msg_body~load_uint(8);
+        in_msg_body.end_parse();
         slice order_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
-        ;; TODO: Implement
-
+        cell body = begin_cell()
+            .store_uint(op::process_arbitration, 32)
+            .store_uint(query_id, 64)
+            .store_uint(admin_category_hash, 256)
+            .store_uint(freelancer_part, 8)
+            .store_uint(customer_part, 8)
+            .end_cell();
+        messages::send_simple_bounceable(order_address, 0, null(), body, 64);
         return ();
     }
 
@@ -352,7 +339,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         int order_index = in_msg_body~load_uint(64);
         throw_unless(error:unauthorized, equal_slices(msg::sender_address,
             calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code))));
-        int category_hash = in_msg_body~load_uint(64);
+        int category_hash = in_msg_body~load_uint(256);
         load_category_data(category_hash);
         category::active_order_count -= 1;
         save_category_data();

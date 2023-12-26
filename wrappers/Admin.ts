@@ -100,6 +100,28 @@ export class Admin implements Contract {
         });
     }
 
+    async sendProcessArbitration(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        orderIndex: number,
+        freelancerPart: number,
+        customerPart: number,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.PROCESS_ARBITRATION_ADMIN, 32)
+                .storeUint(queryID, 64)
+                .storeUint(orderIndex, 64)
+                .storeUint(customerPart, 8)
+                .storeUint(freelancerPart, 8)
+                .endCell(),
+        });
+    }
+
     async getAdminData(provider: ContractProvider): Promise<AdminData> {
         const result = await provider.get('get_admin_data', []);
 

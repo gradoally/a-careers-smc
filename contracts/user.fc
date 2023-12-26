@@ -87,6 +87,8 @@ global cell storage::content;
             (cell is_freelancer?, _) = storage::content.udict_get_ref?(256, "is_freelancer"H);
             throw_unless(error::not_freelancer, is_freelancer?.begin_parse().preload_int(1));
             int order_id = in_msg_body~load_uint(64);
+            cell content = in_msg_body~load_ref();
+            in_msg_body.end_parse();
 
             cell body = begin_cell()
                 .store_uint(op::add_response_master, 32)
@@ -94,6 +96,7 @@ global cell storage::content;
                 .store_uint(storage::index, 64)
                 .store_uint(order_id, 64)
                 .store_slice(storage::user_address)
+                .store_ref(content)
                 .end_cell();
             messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);
             return ();

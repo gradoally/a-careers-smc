@@ -11,6 +11,7 @@ import {
     SendMode,
     Slice,
 } from '@ton/core';
+import { OPCODES } from './Config';
 
 export type OrderConfig = {};
 
@@ -59,7 +60,7 @@ export type ArbitrationData = {
 };
 
 export type Responses = {
-    responses: Dictionary<Address, Slice> | null;
+    responses: Dictionary<Address, Cell> | null;
     responsesCount: number;
 };
 
@@ -88,6 +89,78 @@ export class Order implements Contract {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell().endCell(),
+        });
+    }
+
+    async sendAssignUser(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        price: bigint,
+        deadline: number,
+        freelancerAddress: Address,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.ASSIGN_USER, 32)
+                .storeUint(queryID, 64)
+                .storeCoins(price)
+                .storeUint(deadline, 32)
+                .storeAddress(freelancerAddress)
+                .endCell(),
+        });
+    }
+
+    async sendRejectOrder(provider: ContractProvider, via: Sender, value: bigint, queryID: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell().storeUint(OPCODES.REJECT_ORDER, 32).storeUint(queryID, 64).endCell(),
+        });
+    }
+
+    async sendCancelAssign(provider: ContractProvider, via: Sender, value: bigint, queryID: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell().storeUint(OPCODES.CANCEL_ASSIGN, 32).storeUint(queryID, 64).endCell(),
+        });
+    }
+
+    async sendAcceptOrder(provider: ContractProvider, via: Sender, value: bigint, queryID: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell().storeUint(OPCODES.ACCEPT_ORDER, 32).storeUint(queryID, 64).endCell(),
+        });
+    }
+
+    async sendCompleteOrder(provider: ContractProvider, via: Sender, value: bigint, queryID: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell().storeUint(OPCODES.COMPLETE_ORDER, 32).storeUint(queryID, 64).endCell(),
+        });
+    }
+
+    async sendCustomerFeedback(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        arbitration: boolean,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.CUSTOMER_FEEDBACK, 32)
+                .storeUint(queryID, 64)
+                .storeBit(arbitration)
+                .endCell(),
         });
     }
 
@@ -136,12 +209,7 @@ export class Order implements Contract {
         }
 
         return {
-            responses: responses.beginParse().loadDictDirect(Dictionary.Keys.Address(), {
-                parse: (slice: Slice) => slice,
-                serialize: (src: Slice, builder: Builder) => {
-                    return builder;
-                },
-            }),
+            responses: responses.beginParse().loadDictDirect(Dictionary.Keys.Address(), Dictionary.Values.Cell()),
             responsesCount,
         };
     }

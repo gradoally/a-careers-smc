@@ -1,10 +1,10 @@
-import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { beginCell, Cell, toNano } from '@ton/core';
+import { Blockchain, internal, SandboxContract, TreasuryContract } from '@ton/sandbox';
+import { beginCell, Cell, Dictionary, toNano } from '@ton/core';
 import { Master } from '../wrappers/Master';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { printTransactionFees } from './utils/printTransactionFees';
-import { buildAdminContent, buildOrderContent, buildUserContent } from './utils/buildContent';
+import { buildAdminContent, buildOrderContent, buildResponseContent, buildUserContent } from './utils/buildContent';
 import { getAddressBigInt, sha256Hash } from './utils/helpers';
 import { Admin } from '../wrappers/Admin';
 import { User } from '../wrappers/User';
@@ -116,7 +116,11 @@ describe('AlfaMaterCore', () => {
     });
 
     it('should create admin with root', async () => {
-        const content = buildAdminContent('all');
+        const content = buildAdminContent({
+            category: 'all',
+            canApproveUser: true,
+            canRevokeUser: true,
+        });
         const result = await master.sendCreateAdmin(root.getSender(), toNano('0.05'), 3, content, admins[0].address);
         expect(result.transactions).toHaveTransaction({
             from: root.address,
@@ -145,7 +149,11 @@ describe('AlfaMaterCore', () => {
     });
 
     it('all admin can not create another all admin', async () => {
-        const content = buildAdminContent('all');
+        const content = buildAdminContent({
+            category: 'all',
+            canApproveUser: true,
+            canRevokeUser: true,
+        });
         const result = await adminContracts[0].sendCreateAdmin(
             admins[0].getSender(),
             toNano('0.05'),
@@ -177,7 +185,11 @@ describe('AlfaMaterCore', () => {
     });
 
     it('should create admin with admin', async () => {
-        const content = buildAdminContent('test');
+        const content = buildAdminContent({
+            category: 'test',
+            canApproveUser: true,
+            canRevokeUser: true,
+        });
         const result = await adminContracts[0].sendCreateAdmin(
             admins[0].getSender(),
             toNano('0.05'),
@@ -256,6 +268,11 @@ describe('AlfaMaterCore', () => {
         const userData = await userContracts[0].getUserData();
         expect(userData.revokedAt).toStrictEqual(0);
     });
+
+    /*
+        user 0 - customer
+        user 1 - freelancer
+     */
 
     it('should create order', async () => {
         const content = buildOrderContent('test');
@@ -367,7 +384,10 @@ describe('AlfaMaterCore', () => {
     });
 
     it('should add response', async () => {
-        const result = await userContracts[1].sendAddResponse(users[1].getSender(), toNano('0.05'), 3, 0);
+        const content = buildResponseContent({
+            text: 'test response',
+        });
+        const result = await userContracts[1].sendAddResponse(users[1].getSender(), toNano('0.05'), 3, 0, content);
         expect(result.transactions).toHaveTransaction({
             from: userContracts[1].address,
             to: master.address,
@@ -385,16 +405,271 @@ describe('AlfaMaterCore', () => {
         expect(responsesData.responsesCount).toStrictEqual(1);
         expect(responsesData.responses!.has(users[1].address)).toBeTruthy();
 
+        const response = responsesData
+            .responses!.get(users[1].address)!
+            .beginParse()
+            .loadDictDirect(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell());
+        expect(response.get(sha256Hash('text'))!.beginParse().loadStringTail()).toStrictEqual('test response');
+
         printTransactionFees(result.transactions, 'adding response', addresses);
     });
 
     it('should not add twice', async () => {
-        let result = await userContracts[1].sendAddResponse(users[1].getSender(), toNano('0.05'), 3, 0);
+        let result = await userContracts[1].sendAddResponse(users[1].getSender(), toNano('0.05'), 3, 0, Cell.EMPTY);
         expect(result.transactions).toHaveTransaction({
             from: master.address,
             to: orderContracts[0].address,
             success: false,
-            exitCode: ERRORS.ALREADY_RESPONSED,
+            exitCode: ERRORS.ALREADY_RESPONDED,
         });
+    });
+
+    it('assign user', async () => {
+        const deadline = Math.floor(Date.now() / 1000) + 120;
+        let result = await orderContracts[0].sendAssignUser(
+            users[0].getSender(),
+            toNano('2'),
+            3,
+            toNano(1),
+            deadline,
+            users[2].address,
+        );
+        expect(result.transactions).toHaveTransaction({
+            from: users[0].address,
+            to: orderContracts[0].address,
+            success: false,
+            exitCode: ERRORS.FREELANCER_NOT_FOUND,
+        });
+
+        result = await orderContracts[0].sendAssignUser(
+            users[0].getSender(),
+            toNano('2'),
+            3,
+            toNano(1),
+            deadline,
+            users[1].address,
+        );
+        expect(result.transactions).toHaveTransaction({
+            from: users[0].address,
+            to: orderContracts[0].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: users[0].address,
+            success: true,
+        });
+
+        const orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.waiting_freelancer);
+        expect(orderData.freelancerAddress!.toString()).toStrictEqual(users[1].address.toString());
+        expect(orderData.deadline).toStrictEqual(deadline);
+        expect(orderData.price).toStrictEqual(toNano(1));
+    });
+
+    it('reject order', async () => {
+        const result = await orderContracts[0].sendRejectOrder(users[1].getSender(), toNano('0.05'), 3);
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: users[0].address,
+        });
+        const orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.active);
+    });
+
+    it('assign user again, cancel and assign', async () => {
+        const deadline = Math.floor(Date.now() / 1000) + 120;
+        await orderContracts[0].sendAssignUser(
+            users[0].getSender(),
+            toNano('2'),
+            3,
+            toNano(1),
+            deadline,
+            users[1].address,
+        );
+        let orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.waiting_freelancer);
+
+        const result = await orderContracts[0].sendCancelAssign(users[0].getSender(), toNano('0.05'), 3);
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: users[0].address,
+        });
+        orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.active);
+
+        await orderContracts[0].sendAssignUser(
+            users[0].getSender(),
+            toNano('2'),
+            3,
+            toNano(1),
+            deadline,
+            users[1].address,
+        );
+        orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.waiting_freelancer);
+    });
+
+    it('accept order', async () => {
+        const result = await orderContracts[0].sendAcceptOrder(users[1].getSender(), toNano('0.05'), 3);
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: master.address,
+            success: true,
+            op: OPCODES.ORDER_FEE,
+            value: (toNano(1) * BigInt(protocolFeeNumerator)) / BigInt(protocolFeeDenominator),
+        });
+        const orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.in_progress);
+    });
+
+    it('complete order', async () => {
+        let result = await orderContracts[0].sendCompleteOrder(users[0].getSender(), toNano('0.05'), 3);
+        expect(result.transactions).toHaveTransaction({
+            from: users[0].address,
+            to: orderContracts[0].address,
+            success: false,
+            exitCode: ERRORS.UNAUTHORIZED,
+        });
+
+        result = await orderContracts[0].sendCompleteOrder(users[1].getSender(), toNano('0.05'), 3);
+        expect(result.transactions).toHaveTransaction({
+            from: users[1].address,
+            to: orderContracts[0].address,
+            success: true,
+        });
+        const orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.fulfilled);
+    });
+
+    it('customer feedback (success)', async () => {
+        const beforeFeedback = blockchain.snapshot();
+        const result = await orderContracts[0].sendCustomerFeedback(users[0].getSender(), toNano('0.05'), 3, false);
+        expect(result.transactions).toHaveTransaction({
+            from: users[0].address,
+            to: orderContracts[0].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: users[1].address,
+            success: true,
+            op: OPCODES.ORDER_COMPLETED,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: master.address,
+            success: true,
+            op: OPCODES.ORDER_COMPLETED_NOTIFICATION,
+        });
+        const orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.completed);
+
+        const categoryData = await master.getCategoryData('test');
+        expect(categoryData.activeOrderCount).toStrictEqual(0);
+        await blockchain.loadFrom(beforeFeedback);
+    });
+
+    it('customer feedback (arbitration)', async () => {
+        const beforeFeedback = blockchain.snapshot();
+        const msgIter = await blockchain.sendMessageIter(
+            internal({
+                from: users[0].address,
+                to: orderContracts[0].address,
+                value: toNano('0.05'),
+                body: beginCell().storeUint(OPCODES.CUSTOMER_FEEDBACK, 32).storeUint(3, 64).storeBit(true).endCell(),
+            }),
+        );
+
+        await msgIter.next();
+        let orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.pre_arbitration);
+        await msgIter.next();
+        await msgIter.next();
+        orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.on_arbitration);
+        await blockchain.loadFrom(beforeFeedback);
+
+        const result = await orderContracts[0].sendCustomerFeedback(users[0].getSender(), toNano('0.05'), 3, true);
+        expect(result.transactions).toHaveTransaction({
+            from: users[0].address,
+            to: orderContracts[0].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: master.address,
+            success: true,
+            op: OPCODES.GET_ADMINS,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: master.address,
+            to: orderContracts[0].address,
+            success: true,
+            op: OPCODES.SET_ADMINS,
+        });
+
+        const arbitrationData = await orderContracts[0].getArbitrationData();
+        expect(arbitrationData.adminVotedCount).toStrictEqual(0);
+        expect(arbitrationData.freelancerPart).toStrictEqual(0);
+        expect(arbitrationData.customerPart).toStrictEqual(0);
+        expect(arbitrationData.adminCount).toStrictEqual(1);
+        expect(arbitrationData.agreementPercent).toStrictEqual(333333333);
+
+        printTransactionFees(result.transactions, 'customer feedback (arbitration)', addresses);
+    });
+
+    it('arbitration processing', async () => {
+        const result = await adminContracts[1].sendProcessArbitration(
+            admins[1].getSender(),
+            toNano('0.05'),
+            3,
+            0,
+            70,
+            30,
+        );
+        expect(result.transactions).toHaveTransaction({
+            from: admins[1].address,
+            to: adminContracts[1].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: adminContracts[1].address,
+            to: master.address,
+            success: true,
+            op: OPCODES.PROCESS_ARBITRATION_MASTER,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: master.address,
+            to: orderContracts[0].address,
+            success: true,
+            op: OPCODES.PROCESS_ARBITRATION,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: users[0].address,
+            success: true,
+            op: OPCODES.ORDER_COMPLETED,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: users[1].address,
+            success: true,
+            op: OPCODES.ORDER_COMPLETED,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: master.address,
+            success: true,
+            op: OPCODES.ORDER_COMPLETED_NOTIFICATION,
+        });
+
+        const orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.arbitration_solved);
+
+        const categoryData = await master.getCategoryData('test');
+        expect(categoryData.activeOrderCount).toStrictEqual(0);
+
+        printTransactionFees(result.transactions, 'arbitration processing', addresses);
     });
 });

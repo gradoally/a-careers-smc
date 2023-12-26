@@ -94,10 +94,14 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     );
 }
 
+(int) get_my_category() inline {
+    (cell order_category, _) = storage::content.udict_get_ref?(256, hash::category);
+    return order_category.begin_parse().preload_uint(256);
+}
+
 () validate_caterogy(int admin_category) impure inline_ref {
     if (admin_category != "all"H) {
-        (cell order_category, _) = storage::content.udict_get_ref?(256, hash::category);
-        throw_unless(error::invalid_category, admin_category == order_category.begin_parse().preload_uint(256));
+        throw_unless(error::invalid_category, admin_category == get_my_category());
     }
 }
 
@@ -140,13 +144,11 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         validate_caterogy(admin_category);
         storage::status = status::active;
 
-        (cell category, _) = storage::content.udict_get_ref?(256, hash::category);
-        int category_hash = category.begin_parse().preload_uint(256);
         cell body = begin_cell()
             .store_uint(op::order_activate_notification, 32)
             .store_uint(query_id, 64)
             .store_uint(storage::index, 64)
-            .store_uint(category_hash, 256)
+            .store_uint(get_my_category(), 256)
             .end_cell();
         messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
         save_data();
@@ -156,11 +158,12 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     if (op == op::add_response) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::active);
-        throw_unless(error::too_many_responsed, storage::responses_count < const::max_responses);
+        throw_unless(error::too_many_responded, storage::responses_count < const::max_responses);
         slice user_address = in_msg_body~load_msg_addr();
         (_, int f) = storage::responses.dict_get?(267, user_address);
-        throw_unless(error::already_responsed, f == false);
-        storage::responses~dict_set_builder(267, user_address, begin_cell());
+        throw_unless(error::already_responded, f == false);
+        cell content = in_msg_body~load_ref();
+        storage::responses~dict_set_ref(267, user_address, content);
         storage::responses_count += 1;
         save_data();
         return ();
@@ -172,10 +175,13 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::price = in_msg_body~load_coins();
         storage::deadline = in_msg_body~load_uint(32);
         storage::freelancer_address = in_msg_body~load_msg_addr();
+        throw_unless(error::not_enough_ton, msg_value >= (storage::price + fee::assign_user));
+        raw_reserve(storage::price, 4);
         in_msg_body.end_parse();
         (_, int f) = storage::responses.dict_get?(267, storage::freelancer_address);
         throw_unless(error::freelancer_not_found, f == true);
         storage::status = status::waiting_freelancer;
+        messages::send_simple_non_bounceable(storage::customer_address, 0, null(), null(), 130);
         save_data();
         return ();
     }
@@ -183,7 +189,6 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     if (op == op::accept_order) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::freelancer_address));
         throw_unless(error::invalid_status, storage::status == status::waiting_freelancer);
-        throw_unless(error::not_enough_ton, msg_value >= (storage::price + fee::assign_user));
         storage::status = status::in_progress;
 
         int protocol_fee = storage::price * storage::protocol_fee_numerator / storage::protocol_fee_denominator;
@@ -201,8 +206,8 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
 
     if (op == op::reject_order) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::freelancer_address));
-        throw_unless(error::invalid_status, storage::status == status::active);
-        messages::send_simple_non_bounceable(storage::master_address, storage::price, null(), null(), 1);
+        throw_unless(error::invalid_status, storage::status == status::waiting_freelancer);
+        messages::send_simple_non_bounceable(storage::customer_address, storage::price, null(), null(), 128);
         storage::status = status::active;
         save_data();
         return ();
@@ -211,7 +216,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     if (op == op::cancel_assign) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
         throw_unless(error::invalid_status, storage::status == status::waiting_freelancer);
-        messages::send_simple_non_bounceable(storage::master_address, storage::price, null(), null(), 1);
+        messages::send_simple_non_bounceable(storage::customer_address, storage::price, null(), null(), 128);
         storage::status = status::active;
         save_data();
         return ();
@@ -228,16 +233,13 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     if (op == op::customer_feedback) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
         throw_unless(error::invalid_status, storage::status == status::fulfilled);
-
-        ;; TODO: Implement
-        int arbitration? = true;
+        int arbitration? = in_msg_body~load_int(1);
         if(arbitration?) {
-            (slice caterogy, _) = storage::content.udict_get?(256, "caterogy"H);
             cell body = begin_cell()
                 .store_uint(op::get_admins, 32)
                 .store_uint(query_id, 64)
                 .store_uint(storage::index, 64)
-                .store_uint(slice_hash(caterogy), 256)
+                .store_uint(get_my_category(), 256)
                 .end_cell();
             messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
             storage::status = status::pre_arbitration;
@@ -250,10 +252,17 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
             .store_uint(query_id, 64)
             .end_cell();
         messages::send_simple_non_bounceable(storage::freelancer_address, storage::price, null(), body, 1);
-        messages::send_simple_non_bounceable(storage::customer_address, 0, null(), body, 128);
 
-        ;; TODO: add notification to master
+        body = begin_cell()
+            .store_uint(op::order_completed_notification, 32)
+            .store_uint(query_id, 64)
+            .store_uint(storage::index, 64)
+            .store_uint(get_my_category(), 256)
+            .end_cell();
+        messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
 
+        storage::status = status::completed;
+        save_data();
         return ();
     }
 
@@ -261,6 +270,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::pre_arbitration);
         storage::admin_count = in_msg_body~load_uint(64);
+        storage::agreement_perc = in_msg_body~load_uint(64);
         storage::status = status::on_arbitration;
         save_data();
         return ();
@@ -275,7 +285,6 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::freelancer_part += in_msg_body~load_uint(8);
         storage::customer_part += in_msg_body~load_uint(8);
         storage::admin_voted_count += 1;
-
         if((storage::admin_voted_count * const::scale_factor / storage::admin_count) >= storage::agreement_perc) {
             int customer_part = storage::price * storage::freelancer_part / storage::admin_voted_count / 100;
             int freelancer_part = storage::price - customer_part;
@@ -283,22 +292,21 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
                 .store_uint(op::order_completed, 32)
                 .store_uint(query_id, 64)
                 .end_cell();
-            ;; TODO: raw_reserve? all balance to customer?
+
             messages::send_simple_non_bounceable(storage::customer_address, customer_part, null(), body, 1);
             messages::send_simple_non_bounceable(storage::freelancer_address, freelancer_part, null(), body, 1);
 
-            (slice caterogy, _) = storage::content.udict_get?(256, "caterogy"H);
             body = begin_cell()
                 .store_uint(op::order_completed_notification, 32)
                 .store_uint(query_id, 64)
                 .store_uint(storage::index, 64)
-                .store_uint(slice_hash(caterogy), 256)
+                .store_uint(get_my_category(), 256)
                 .end_cell();
-            messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
+            messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 128);
             storage::status = status::arbitration_solved;
-            save_data();
         }
 
+        save_data();
         return ();
     }
 }
