@@ -228,7 +228,7 @@ describe('AlfaMaterCore', () => {
 
     it('should create 2 users', async () => {
         const content = buildUserContent(true, true);
-        const result = await master.sendCreateUser(users[0].getSender(), toNano('0.05'), 3, content, users[0].address);
+        const result = await master.sendCreateUser(users[0].getSender(), toNano('0.05'), 3, content);
         expect(result.transactions).toHaveTransaction({
             from: users[0].address,
             to: master.address,
@@ -356,7 +356,7 @@ describe('AlfaMaterCore', () => {
 
     it('should create 2 user and activate', async () => {
         const content = buildUserContent(true, true);
-        const result = await master.sendCreateUser(users[1].getSender(), toNano('0.05'), 3, content, users[1].address);
+        const result = await master.sendCreateUser(users[1].getSender(), toNano('0.05'), 3, content);
         expect(result.transactions).toHaveTransaction({
             from: users[1].address,
             to: master.address,

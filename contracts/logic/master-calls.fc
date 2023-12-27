@@ -1,0 +1,154 @@
+#include "../master.fc";
+
+() handle::admin_call(slice in_msg_body) impure inline {
+    if (msg::op == op::create_admin_master) {
+        cell content = in_msg_body~load_dict();
+        slice admin_address = in_msg_body~load_msg_addr();
+        in_msg_body.end_parse();
+        create_admin(content, admin_address, false);
+        storage::admin_next_index += 1;
+        save_data();
+        return ();
+    }
+
+    if (msg::op == op::admin_revoked_notification) {
+        int category_hash = in_msg_body~load_uint(64);
+        load_category_data(category_hash);
+        category::admin_count -= 1;
+        save_category_data();
+        save_data();
+        return ();
+    }
+
+    if (msg::op  == op::activate_order_master) {
+        int category_hash = in_msg_body~load_uint(256);
+        int order_index = in_msg_body~load_uint(64);
+        slice order_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
+        in_msg_body.end_parse();
+
+        cell body = begin_cell()
+            .store_uint(op::activate_order, 32)
+            .store_uint(msg::query_id, 64)
+            .store_uint(category_hash, 256)
+            .end_cell();
+        messages::send_simple_bounceable(order_address, 0, null(), body, 64);
+        return ();
+    }
+
+    if (msg::op  == op::process_arbitration_master) {
+        int admin_category_hash = in_msg_body~load_uint(256);
+        int order_index = in_msg_body~load_uint(64);
+        int customer_part = in_msg_body~load_uint(8);
+        int freelancer_part = in_msg_body~load_uint(8);
+        in_msg_body.end_parse();
+        slice order_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
+        cell body = begin_cell()
+            .store_uint(op::process_arbitration, 32)
+            .store_uint(msg::query_id, 64)
+            .store_uint(admin_category_hash, 256)
+            .store_uint(freelancer_part, 8)
+            .store_uint(customer_part, 8)
+            .end_cell();
+        messages::send_simple_bounceable(order_address, 0, null(), body, 64);
+        return ();
+    }
+
+    if (msg::op  == op::activate_user_master) {
+        in_msg_body~skip_bits(256);
+        int user_index = in_msg_body~load_uint(64);
+        slice user_contract_address = calculate_contract_address(calculate_contract_state_init(user_index, storage::user_code));
+        cell body = begin_cell()
+            .store_uint(op::activate_user, 32)
+            .store_uint(msg::query_id, 64)
+            .end_cell();
+        messages::send_simple_bounceable(user_contract_address, 0, null(), body, 64);
+        return ();
+    }
+}
+
+() handle::user_call(slice in_msg_body, int msg_value) impure inline {
+    if (msg::op == op::create_order_master) {
+        throw_unless(error::not_enough_ton, msg_value >= (fee::order_creation + protocol_fee::order_creation));
+        raw_reserve(protocol_fee::order_creation, 4);
+
+        cell content = in_msg_body~load_dict();
+        (cell admin_caterogy, int f) = content.udict_get_ref?(256, hash::category);
+        throw_unless(error::invalid_content, f == true);
+        int category_hash = admin_caterogy.begin_parse().preload_uint(256);
+        load_category_data(category_hash);
+        throw_unless(error::invalid_category, category::active == true);
+
+        cell order_state_init = calculate_contract_state_init(storage::order_next_index, storage::order_code);
+        slice order_address = calculate_contract_address(order_state_init);
+
+        slice customer_address = in_msg_body~load_msg_addr();
+        int price = in_msg_body~load_coins();
+        int deadline = in_msg_body~load_uint(32);
+        cell body = begin_cell()
+            .store_slice(customer_address)
+            .store_dict(content)
+            .store_coins(price)
+            .store_uint(deadline, 32)
+            .store_uint(storage::fee_numerator, 8)
+            .store_uint(storage::fee_denominator, 8)
+            .end_cell();
+        messages::send_simple_bounceable(order_address, 0, order_state_init, body, 128);
+        storage::order_next_index += 1;
+        save_data();
+        return ();
+    }
+
+    if (msg::op == op::add_response_master) {
+        int order_index = in_msg_body~load_uint(64);
+        slice order_contract_address = calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
+        slice user_address = in_msg_body~load_msg_addr();
+        cell content = in_msg_body~load_ref();
+        cell body = begin_cell()
+            .store_uint(op::add_response, 32)
+            .store_uint(msg::query_id, 64)
+            .store_slice(user_address)
+            .store_ref(content)
+            .end_cell();
+
+        messages::send_simple_bounceable(order_contract_address, 0, null(), body, 64);
+        return ();
+    }
+}
+
+() handle::order_call(slice in_msg_body) impure inline {
+    if (msg::op == op::order_activate_notification) {
+        int category_hash = in_msg_body~load_uint(256);
+        load_category_data(category_hash);
+        category::active_order_count += 1;
+        save_category_data();
+        save_data();
+        return ();
+    }
+
+    if (msg::op == op::get_admins) {
+        int category_hash = in_msg_body~load_uint(256);
+        load_category_data(category_hash);
+        cell body = begin_cell()
+            .store_uint(op::set_admins, 32)
+            .store_uint(msg::query_id, 64)
+            .store_uint(category::admin_count, 64)
+            .store_uint(category::agreement_perc, 64)
+            .end_cell();
+
+        messages::send_simple_bounceable(msg::sender_address, 0, null(), body, 64);
+        return ();
+    }
+
+    if (msg::op == op::order_completed_notification) {
+        int category_hash = in_msg_body~load_uint(256);
+        load_category_data(category_hash);
+        category::active_order_count -= 1;
+        save_category_data();
+        save_data();
+        return ();
+    }
+
+    if (op::order_fee) {
+        return ();
+    }
+}

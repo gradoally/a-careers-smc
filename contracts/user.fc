@@ -61,10 +61,15 @@ global cell storage::content;
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
 
+
+    ;; --------------- From User ---------------
+
     if(equal_slices(sender_address, storage::user_address)) {
         throw_unless(error:unauthorized, storage::revoked_at == 0);
 
         if (op == op::create_order) {
+            (cell is_freelancer?, _) = storage::content.udict_get_ref?(256, "is_user"H);
+            throw_unless(error::not_freelancer, is_freelancer?.begin_parse().preload_int(1));
             cell content = in_msg_body~load_dict();
             int price = in_msg_body~load_coins();
             int deadline = in_msg_body~load_uint(32);
@@ -104,6 +109,9 @@ global cell storage::content;
 
         throw(0xFFFF);
     }
+
+
+    ;; --------------- From Master ---------------
 
     if(equal_slices(sender_address, storage::master_address)) {
         if (op == op::activate_user) {

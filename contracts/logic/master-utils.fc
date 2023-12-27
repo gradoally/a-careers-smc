@@ -1,7 +1,4 @@
-#include "../constants/errors.fc";
 #include "../master.fc";
-#include "utils.fc";
-#include "messages.fc";
 
 () load_category_data(int category_hash) impure inline {
     (slice category_value, int f) = storage::categories.udict_get?(256, category_hash);

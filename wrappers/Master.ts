@@ -149,14 +149,7 @@ export class Master implements Contract {
         });
     }
 
-    async sendCreateUser(
-        provider: ContractProvider,
-        via: Sender,
-        value: bigint,
-        queryID: number,
-        content: Cell,
-        userAddress: Address,
-    ) {
+    async sendCreateUser(provider: ContractProvider, via: Sender, value: bigint, queryID: number, content: Cell) {
         await provider.internal(via, {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
@@ -164,7 +157,6 @@ export class Master implements Contract {
                 .storeUint(OPCODES.CREATE_USER, 32)
                 .storeUint(queryID, 64)
                 .storeMaybeRef(content)
-                .storeAddress(userAddress)
                 .endCell(),
         });
     }
