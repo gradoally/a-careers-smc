@@ -115,13 +115,14 @@ global cell storage::content;
 
     if(equal_slices(sender_address, storage::master_address)) {
         if (op == op::activate_user) {
-            throw_unless(error:unauthorized, storage::revoked_at == 1);
+;;            throw_unless(error:unauthorized, storage::revoked_at == 1);
+            ;; todo: can be activated only once?
             storage::revoked_at = 0;
             save_data();
             return ();
         }
 
-        if (op == op::revoke_admin) {
+        if (op == op::revoke_user) {
             throw_unless(error::already_revoked, storage::revoked_at == 0);
             storage::revoked_at = now();
             save_data();

@@ -672,4 +672,80 @@ describe('AlfaMaterCore', () => {
 
         printTransactionFees(result.transactions, 'arbitration processing', addresses);
     });
+
+    it('revoke user by test admin', async () => {
+        const result = await adminContracts[1].sendRevokeUser(admins[1].getSender(), toNano('0.05'), 3, 0);
+        expect(result.transactions).toHaveTransaction({
+            from: admins[1].address,
+            to: adminContracts[1].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: adminContracts[1].address,
+            to: master.address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: master.address,
+            to: userContracts[0].address,
+            success: true,
+        });
+
+        let userData = await userContracts[0].getUserData();
+        expect(userData.revokedAt).toStrictEqual(result.transactions[3].now);
+    });
+
+    it('revoke test admin by all admin', async () => {
+        const result = await adminContracts[0].sendRevokeAdmin(admins[0].getSender(), toNano('0.05'), 3, 1);
+        expect(result.transactions).toHaveTransaction({
+            from: admins[0].address,
+            to: adminContracts[0].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: adminContracts[0].address,
+            to: master.address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: master.address,
+            to: adminContracts[1].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: adminContracts[1].address,
+            to: master.address,
+            success: true,
+            op: OPCODES.ADMIN_REVOKED_NOTIFICATION,
+        });
+
+        let adminData = await adminContracts[1].getAdminData();
+        expect(adminData.revokedAt).toStrictEqual(result.transactions[3].now);
+
+        const categoryData = await master.getCategoryData('test');
+        expect(categoryData.adminCount).toStrictEqual(0);
+    });
+
+    it('revoke all admin by root', async () => {
+        const result = await master.sendRevokeAdmin(root.getSender(), toNano('0.05'), 3, 0);
+        expect(result.transactions).toHaveTransaction({
+            from: root.address,
+            to: master.address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: master.address,
+            to: adminContracts[0].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: adminContracts[0].address,
+            to: master.address,
+            success: true,
+            op: OPCODES.ADMIN_REVOKED_NOTIFICATION,
+        });
+
+        let adminData = await adminContracts[0].getAdminData();
+        expect(adminData.revokedAt).toStrictEqual(result.transactions[2].now);
+    });
 });

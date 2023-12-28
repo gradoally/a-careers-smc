@@ -122,6 +122,30 @@ export class Admin implements Contract {
         });
     }
 
+    async sendRevokeAdmin(provider: ContractProvider, via: Sender, value: bigint, queryID: number, adminIndex: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.REVOKE_ADMIN_ADMIN, 32)
+                .storeUint(queryID, 64)
+                .storeUint(adminIndex, 64)
+                .endCell(),
+        });
+    }
+
+    async sendRevokeUser(provider: ContractProvider, via: Sender, value: bigint, queryID: number, userIndex: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.REVOKE_USER_ADMIN, 32)
+                .storeUint(queryID, 64)
+                .storeUint(userIndex, 64)
+                .endCell(),
+        });
+    }
+
     async getAdminData(provider: ContractProvider): Promise<AdminData> {
         const result = await provider.get('get_admin_data', []);
 

@@ -14,6 +14,8 @@ export type ResponseData = {
 export function buildAdminContent(data: AdminData): Cell {
     const content = Dictionary.empty<bigint, Cell>();
     content.set(sha256Hash('category'), beginCell().storeUint(sha256Hash(data.category), 256).endCell());
+    content.set(sha256Hash('can_approve_user'), beginCell().storeBit(data.canApproveUser).endCell());
+    content.set(sha256Hash('can_revoke_user'), beginCell().storeBit(data.canRevokeUser).endCell());
 
     return beginCell().storeDictDirect(content, Dictionary.Keys.BigUint(256), Dictionary.Values.Cell()).endCell();
 }

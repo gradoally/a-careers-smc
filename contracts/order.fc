@@ -179,7 +179,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         raw_reserve(storage::price, 4);
         in_msg_body.end_parse();
         (_, int f) = storage::responses.dict_get?(267, storage::freelancer_address);
-        throw_unless(error::freelancer_not_found, f == true);
+        throw_unless(error::freelancer_not_found, f);
         storage::status = status::waiting_freelancer;
         messages::send_simple_non_bounceable(storage::customer_address, 0, null(), null(), 130);
         save_data();

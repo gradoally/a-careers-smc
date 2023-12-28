@@ -3,6 +3,7 @@ const int error::invalid_category = 402;
 const int error::invalid_content = 403;
 const int error::not_enough_ton = 404;
 const int error::already_revoked = 406;
+const int error::category_not_active = 407;
 
 ;; --------------- Order ---------------
 const int error::invalid_status = 501;

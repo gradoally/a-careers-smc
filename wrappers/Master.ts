@@ -161,6 +161,18 @@ export class Master implements Contract {
         });
     }
 
+    async sendRevokeAdmin(provider: ContractProvider, via: Sender, value: bigint, queryID: number, adminIndex: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.REVOKE_ADMIN_MASTER_ROOT, 32)
+                .storeUint(queryID, 64)
+                .storeUint(adminIndex, 64)
+                .endCell(),
+        });
+    }
+
     async getIndexes(provider: ContractProvider): Promise<Indexes> {
         const result = await provider.get('get_indexes', []);
 

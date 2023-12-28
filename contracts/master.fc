@@ -99,8 +99,6 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     msg::op = in_msg_body~load_uint(32);
     msg::query_id = in_msg_body~load_uint(64);
 
-    ;; TODO: List of available categories? Validate category on order creation?
-
     ;; --------------- Interactions with root ---------------
 
     if (msg::op == op::create_category) {
@@ -135,6 +133,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         cell content = in_msg_body~load_dict();
         in_msg_body.end_parse();
         ;; TODO: Check for existing fields
+        ;; todo: fee on creation?
         int user_index = storage::user_next_index;
         cell user_state_init = calculate_contract_state_init(user_index, storage::user_code);
         slice user_contract_address = calculate_contract_address(user_state_init);
@@ -142,19 +141,23 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         .store_slice(msg::sender_address)
         .store_dict(content)
         .end_cell();
-        messages::send_simple_bounceable(user_contract_address, 0, user_state_init, body, 128);
+        messages::send_simple_bounceable(user_contract_address, 0, user_state_init, body, 64);
         storage::user_next_index += 1;
         save_data();
         return ();
     }
 
-    if (msg::op == op::revoke_admin_master) {
+    if (msg::op == op::revoke_admin_master_root) {
         throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
         int admin_index = in_msg_body~load_uint(64);
         cell admin_state_init = calculate_contract_state_init(admin_index, storage::admin_code);
         slice admin_contract_address = calculate_contract_address(admin_state_init);
-
-        ;; TODO: implement
+        in_msg_body.end_parse();
+        cell body = begin_cell()
+            .store_uint(op::revoke_admin, 32)
+            .store_uint(msg::query_id, 64)
+            .end_cell();
+        messages::send_simple_bounceable(admin_contract_address, 0, admin_state_init, body, 64);
         return ();
     }
 
@@ -171,17 +174,6 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     }
     elseif (equal_slices(msg::sender_address,calculate_contract_address(calculate_contract_state_init(contract_index, storage::order_code)))) {
         handle::order_call(in_msg_body);
-        return ();
-    }
-
-
-    if (msg::op == op::revoke_user_master) {
-        int user_index = in_msg_body~load_uint(64);
-        cell user_state_init = calculate_contract_state_init(user_index, storage::user_code);
-        slice user_contract_address = calculate_contract_address(user_state_init);
-
-        ;; TODO: Implement
-
         return ();
     }
 
