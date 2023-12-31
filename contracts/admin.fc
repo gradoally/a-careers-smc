@@ -170,8 +170,6 @@ int get_category() inline {
             return ();
         }
 
-        ;; todo: can user edit content?
-
         throw(0xFFFF);
     }
 
@@ -192,8 +190,6 @@ int get_category() inline {
             save_data();
             return ();
         }
-
-        ;; TODO: Handle master messages
 
         throw(0xFFFF);
     }

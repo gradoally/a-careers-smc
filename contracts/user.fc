@@ -127,7 +127,6 @@ global cell storage::content;
     if(equal_slices(sender_address, storage::master_address)) {
         if (op == op::activate_user) {
 ;;            throw_unless(error:unauthorized, storage::revoked_at == 1);
-            ;; todo: can be activated only once?
             storage::revoked_at = 0;
             save_data();
             return ();
@@ -139,8 +138,6 @@ global cell storage::content;
             save_data();
             return ();
         }
-
-        ;; TODO: Handle master messages
 
         throw(0xFFFF);
     }
