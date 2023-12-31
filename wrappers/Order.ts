@@ -21,22 +21,27 @@ const int status::active = 1;
 const int status::waiting_freelancer = 2;
 const int status::in_progress = 3;
 const int status::fulfilled = 4;
-const int status::completed = 5;
-const int status::pre_arbitration = 6;
-const int status::on_arbitration = 7;
-const int status::arbitration_solved = 8;
+const int status::refunded = 5;
+const int status::completed = 6;
+const int status::payment_forced = 7;
+const int status::pre_arbitration = 8;
+const int status::on_arbitration = 9;
+const int status::arbitration_solved = 10;
  */
 
 export enum Status {
     moderation = 0,
-    active,
-    waiting_freelancer,
-    in_progress,
-    fulfilled,
-    completed,
-    pre_arbitration,
-    on_arbitration,
-    arbitration_solved,
+    active = 1,
+    waiting_freelancer = 2,
+    in_progress = 3,
+    fulfilled = 4,
+    refunded = 5,
+    completed = 6,
+    payment_forced = 7,
+    pre_arbitration = 8,
+    on_arbitration = 9,
+    arbitration_solved = 10,
+    outdated = 11,
 }
 
 export type OrderData = {
@@ -162,6 +167,26 @@ export class Order implements Contract {
                 .storeBit(arbitration)
                 .endCell(),
         });
+    }
+
+    async sendRefund(provider: ContractProvider, via: Sender, value: bigint, queryID: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell().storeUint(OPCODES.REFUND, 32).storeUint(queryID, 64).endCell(),
+        });
+    }
+
+    async sendForcePayment(provider: ContractProvider, via: Sender, value: bigint, queryID: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell().storeUint(OPCODES.FORCE_PAYMENT, 32).storeUint(queryID, 64).endCell(),
+        });
+    }
+
+    async sendOutdated(provider: ContractProvider, queryID: 2) {
+        await provider.external(beginCell().storeUint(2, 64).endCell());
     }
 
     async getOrderData(provider: ContractProvider): Promise<OrderData> {

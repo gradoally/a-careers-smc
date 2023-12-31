@@ -68,11 +68,12 @@ global cell storage::content;
         throw_unless(error:unauthorized, storage::revoked_at == 0);
 
         if (op == op::create_order) {
-            (cell is_freelancer?, _) = storage::content.udict_get_ref?(256, "is_user"H);
-            throw_unless(error::not_freelancer, is_freelancer?.begin_parse().preload_int(1));
+            (cell is_user?, _) = storage::content.udict_get_ref?(256, "is_user"H);
+            throw_unless(error::not_freelancer, is_user?.begin_parse().preload_int(1));
             cell content = in_msg_body~load_dict();
             int price = in_msg_body~load_coins();
             int deadline = in_msg_body~load_uint(32);
+            int time_for_check = in_msg_body~load_uint(32);
             in_msg_body.end_parse();
             cell body = begin_cell()
                 .store_uint(op::create_order_master, 32)
@@ -82,6 +83,7 @@ global cell storage::content;
                 .store_slice(storage::user_address)
                 .store_coins(price)
                 .store_uint(deadline, 32)
+                .store_uint(time_for_check, 32)
                 .end_cell();
 
             messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);
@@ -104,6 +106,15 @@ global cell storage::content;
                 .store_ref(content)
                 .end_cell();
             messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);
+            return ();
+        }
+
+        if (op == op::change_content_user) {
+            cell new_content = in_msg_body~load_ref();
+            in_msg_body.end_parse();
+            storage::content = new_content;
+            storage::revoked_at = 1;
+            save_data();
             return ();
         }
 

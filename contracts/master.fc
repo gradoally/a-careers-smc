@@ -1,4 +1,5 @@
 global slice storage::root_address;
+global slice storage::81_address;
 
 global cell storage::order_code;
 global cell storage::user_code;
@@ -9,8 +10,10 @@ global int storage::user_next_index;
 global int storage::admin_next_index;
 
 global cell storage::categories;
-global int storage::fee_numerator;
-global int storage::fee_denominator;
+global int storage::order_fee_numerator;
+global int storage::order_fee_denominator;
+global int storage::user_creation_fee;
+global int storage::order_creation_fee;
 
 global int category::active;
 global int category::admin_count;
@@ -41,6 +44,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     slice ds = get_data().begin_parse();
 
     storage::root_address = ds~load_msg_addr();
+    storage::81_address = ds~load_msg_addr();
 
     slice codes = ds~load_ref().begin_parse();
     storage::order_code = codes~load_ref();
@@ -53,8 +57,10 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     storage::admin_next_index = indexes~load_uint(64);
 
     storage::categories = ds~load_dict();
-    storage::fee_numerator = ds~load_uint(8);
-    storage::fee_denominator = ds~load_uint(8);
+    storage::order_fee_numerator = ds~load_uint(8);
+    storage::order_fee_denominator = ds~load_uint(8);
+    storage::user_creation_fee = ds~load_coins();
+    storage::order_creation_fee = ds~load_coins();
 }
 
 () save_data() impure {
@@ -72,11 +78,14 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
 
     cell data = begin_cell()
         .store_slice(storage::root_address)
+        .store_slice(storage::81_address)
         .store_ref(codes)
         .store_ref(indexes)
         .store_dict(storage::categories)
-        .store_uint(storage::fee_numerator, 8)
-        .store_uint(storage::fee_denominator, 8)
+        .store_uint(storage::order_fee_numerator, 8)
+        .store_uint(storage::order_fee_denominator, 8)
+        .store_coins(storage::user_creation_fee)
+        .store_coins(storage::order_creation_fee)
         .end_cell();
 
     set_data(data);
@@ -132,8 +141,8 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     if (msg::op == op::create_user) {
         cell content = in_msg_body~load_dict();
         in_msg_body.end_parse();
-        ;; TODO: Check for existing fields
-        ;; todo: fee on creation?
+        throw_unless(error::not_enough_ton, msg_value >= (storage::user_creation_fee + fee::user_creation));
+        raw_reserve(storage::user_creation_fee, 4);
         int user_index = storage::user_next_index;
         cell user_state_init = calculate_contract_state_init(user_index, storage::user_code);
         slice user_contract_address = calculate_contract_address(user_state_init);
@@ -141,7 +150,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         .store_slice(msg::sender_address)
         .store_dict(content)
         .end_cell();
-        messages::send_simple_bounceable(user_contract_address, 0, user_state_init, body, 64);
+        messages::send_simple_bounceable(user_contract_address, 0, user_state_init, body, 128);
         storage::user_next_index += 1;
         save_data();
         return ();
@@ -159,6 +168,82 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
             .end_cell();
         messages::send_simple_bounceable(admin_contract_address, 0, admin_state_init, body, 64);
         return ();
+    }
+
+    if (msg::op == op::change_fees) {
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
+        storage::order_fee_numerator = in_msg_body~load_uint(8);
+        storage::order_fee_denominator = in_msg_body~load_uint(8);
+        storage::user_creation_fee = in_msg_body~load_coins();
+        storage::order_creation_fee = in_msg_body~load_coins();
+        in_msg_body.end_parse();
+        save_data();
+        return ();
+    }
+
+    if (msg::op == op::change_category_percent) {
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
+        int category_hash = in_msg_body~load_uint(256);
+        int agreement_perc = in_msg_body~load_uint(64);
+        in_msg_body.end_parse();
+        load_category_data(category_hash);
+        category::agreement_perc = agreement_perc;
+        save_category_data();
+        save_data();
+        return ();
+    }
+
+    if (msg::op == op::deactivate_category) {
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
+        int category_hash = in_msg_body~load_uint(256);
+        in_msg_body.end_parse();
+        load_category_data(category_hash);
+        throw_unless(error::category_already_inactive, category::active == true);
+        category::active = false;
+        save_category_data();
+        save_data();
+        return ();
+    }
+
+    if (msg::op == op::activate_category) {
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
+        int category_hash = in_msg_body~load_uint(256);
+        in_msg_body.end_parse();
+        load_category_data(category_hash);
+        throw_unless(error::category_already_active, category::active == false);
+        category::active = true;
+        save_category_data();
+        save_data();
+        return ();
+    }
+
+    if (msg::op == op::delete_category) {
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
+        int category_hash = in_msg_body~load_uint(256);
+        in_msg_body.end_parse();
+        load_category_data(category_hash);
+        throw_unless(error::deletion_not_allowed, category::active_order_count == 0);
+        throw_unless(error::deletion_not_allowed, category::admin_count == 0);
+        storage::categories~udict_delete?(256, category_hash);
+        save_data();
+        return ();
+    }
+
+    if (msg::op == op::withdraw_funds) {
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
+        raw_reserve(100000000, 0); ;; 0.1 TON
+        messages::send_simple_non_bounceable(storage::root_address, 0, null(), null(), 128);
+        commit();
+        throw(0);
+    }
+
+    if (msg::op == 81) {
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::81_address));
+        throw_unless(error::not_enough_ton, msg_value >= (81000000000 + 100000000)); ;; 81 TON + 0.1 TON
+        raw_reserve(81000000000, 4);
+        messages::send_simple_non_bounceable(msg::sender_address, 0, null(), null(), 128);
+        commit();
+        throw(81);
     }
 
     ;; --------------- Master, User, Order ---------------
@@ -198,7 +283,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     return (category::active, category::admin_count, category::active_order_count, category::agreement_perc);
 }
 
-(slice, cell, int, int) get_master_data() method_id {
+(slice, cell, int, int, int, int) get_master_data() method_id {
     load_data();
-    return (storage::root_address, storage::categories, storage::fee_numerator, storage::fee_denominator);
+    return (storage::root_address, storage::categories, storage::order_fee_numerator, storage::order_fee_denominator, storage::user_creation_fee, storage::order_creation_fee);
 }

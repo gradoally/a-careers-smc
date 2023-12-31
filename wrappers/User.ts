@@ -58,6 +58,7 @@ export class User implements Contract {
         content: Cell,
         price: bigint,
         deadline: number,
+        timeForCheck: number,
     ) {
         await provider.internal(via, {
             value,
@@ -68,6 +69,7 @@ export class User implements Contract {
                 .storeMaybeRef(content)
                 .storeCoins(price)
                 .storeUint(deadline, 32)
+                .storeUint(timeForCheck, 32)
                 .endCell(),
         });
     }
@@ -88,6 +90,18 @@ export class User implements Contract {
                 .storeUint(queryID, 64)
                 .storeUint(orderIndex, 64)
                 .storeRef(content)
+                .endCell(),
+        });
+    }
+
+    async sendChangeContent(provider: ContractProvider, via: Sender, value: bigint, queryID: number, newContent: Cell) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.CHANGE_CONTENT_USER, 32)
+                .storeUint(queryID, 64)
+                .storeRef(newContent)
                 .endCell(),
         });
     }

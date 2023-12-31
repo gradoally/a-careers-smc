@@ -91,8 +91,8 @@
 
 () handle::user_call(slice in_msg_body, int msg_value) impure inline {
     if (msg::op == op::create_order_master) {
-        throw_unless(error::not_enough_ton, msg_value >= (fee::order_creation + protocol_fee::order_creation));
-        raw_reserve(protocol_fee::order_creation, 4);
+        throw_unless(error::not_enough_ton, msg_value >= (fee::order_creation + storage::order_creation_fee));
+        raw_reserve(storage::order_creation_fee, 4);
 
         cell content = in_msg_body~load_dict();
         (cell admin_caterogy, int f) = content.udict_get_ref?(256, hash::category);
@@ -107,13 +107,15 @@
         slice customer_address = in_msg_body~load_msg_addr();
         int price = in_msg_body~load_coins();
         int deadline = in_msg_body~load_uint(32);
+        int time_for_check = in_msg_body~load_uint(32);
         cell body = begin_cell()
             .store_slice(customer_address)
             .store_dict(content)
             .store_coins(price)
             .store_uint(deadline, 32)
-            .store_uint(storage::fee_numerator, 8)
-            .store_uint(storage::fee_denominator, 8)
+            .store_uint(time_for_check, 32)
+            .store_uint(storage::order_fee_numerator, 8)
+            .store_uint(storage::order_fee_denominator, 8)
             .end_cell();
         messages::send_simple_bounceable(order_address, 0, order_state_init, body, 128);
         storage::order_next_index += 1;

@@ -1,5 +1,5 @@
-import { Blockchain, internal, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { beginCell, Cell, Dictionary, toNano } from '@ton/core';
+import { Blockchain, BlockchainSnapshot, internal, SandboxContract, TreasuryContract } from '@ton/sandbox';
+import { beginCell, Cell, Dictionary, toNano, TransactionDescriptionGeneric } from '@ton/core';
 import { Master } from '../wrappers/Master';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
@@ -26,13 +26,19 @@ describe('AlfaMaterCore', () => {
 
     let deployer: SandboxContract<TreasuryContract>;
     let root: SandboxContract<TreasuryContract>;
+    let user81: SandboxContract<TreasuryContract>;
     let admins: SandboxContract<TreasuryContract>[] = [];
     let users: SandboxContract<TreasuryContract>[] = [];
     let orders: SandboxContract<TreasuryContract>[] = [];
 
     let addresses: { [key: string]: string } = {};
-    const protocolFeeNumerator = 2;
-    const protocolFeeDenominator = 100;
+    const orderFeeNumerator = 2;
+    const orderFeeDenominator = 100;
+    const userCreationFee = toNano('2');
+    const orderCreationFee = toNano('1');
+    const orderPrice: bigint = toNano(1);
+    let beforeOrderComplete: BlockchainSnapshot;
+    let beforeOrderStart: BlockchainSnapshot;
 
     beforeAll(async () => {
         masterCode = await compile('Master');
@@ -44,6 +50,7 @@ describe('AlfaMaterCore', () => {
 
         deployer = await blockchain.treasury('deployer');
         root = await blockchain.treasury('root');
+        user81 = await blockchain.treasury('user81');
         for (let i = 0; i < 3; i++) {
             admins.push(await blockchain.treasury('admin ' + i));
             users.push(await blockchain.treasury('user ' + i));
@@ -54,11 +61,14 @@ describe('AlfaMaterCore', () => {
             Master.createFromConfig(
                 {
                     rootAddress: root.address,
+                    address81: user81.address,
                     adminCode: adminCode,
                     userCode: userCode,
                     orderCode: orderCode,
-                    feeNumerator: protocolFeeNumerator,
-                    feeDenominator: protocolFeeDenominator,
+                    orderFeeNumerator: orderFeeNumerator,
+                    orderFeeDenominator: orderFeeDenominator,
+                    userCreationFee: userCreationFee,
+                    orderCreationFee: orderCreationFee,
                 },
                 masterCode,
             ),
@@ -96,8 +106,10 @@ describe('AlfaMaterCore', () => {
         const masterData = await master.getMasterData();
         expect(masterData.rootAddress.toString()).toStrictEqual(root.address.toString());
         expect(masterData.categories).toBeUndefined();
-        expect(masterData.feeNumerator).toStrictEqual(protocolFeeNumerator);
-        expect(masterData.feeDenominator).toStrictEqual(protocolFeeDenominator);
+        expect(masterData.orderFeeNumerator).toStrictEqual(orderFeeNumerator);
+        expect(masterData.orderFeeDenominator).toStrictEqual(orderFeeDenominator);
+        expect(masterData.userCreationFee).toStrictEqual(userCreationFee);
+        expect(masterData.orderCreationFee).toStrictEqual(orderCreationFee);
     });
 
     it('should create category all', async () => {
@@ -226,14 +238,20 @@ describe('AlfaMaterCore', () => {
         printTransactionFees(result.transactions, 'creating admin by another admin', addresses);
     });
 
-    it('should create 2 users', async () => {
+    it('should create user', async () => {
         const content = buildUserContent(true, true);
-        const result = await master.sendCreateUser(users[0].getSender(), toNano('0.05'), 3, content);
+        const masterBalanceBefore = (await blockchain.getContract(master.address)).balance;
+        const result = await master.sendCreateUser(users[0].getSender(), toNano('4'), 3, content);
         expect(result.transactions).toHaveTransaction({
             from: users[0].address,
             to: master.address,
             success: true,
         });
+
+        const txDescription = result.transactions[1].description as TransactionDescriptionGeneric;
+        expect((await blockchain.getContract(master.address)).balance).toStrictEqual(
+            masterBalanceBefore + userCreationFee - txDescription.storagePhase!.storageFeesCollected,
+        );
         const userContractAddress = getAddressBigInt(result.transactions[2].address);
         const userContract = blockchain.openContract(User.createFromAddress(userContractAddress));
         userContracts.push(userContract);
@@ -277,13 +295,15 @@ describe('AlfaMaterCore', () => {
     it('should create order', async () => {
         const content = buildOrderContent('test');
         const deadline = Math.floor(Date.now() / 1000) + 100;
+        const timeForCheck = 100;
         const result = await userContracts[0].sendCreateOrder(
             users[0].getSender(),
             toNano('10'),
             3,
             content,
-            toNano('0.05'),
+            orderPrice,
             deadline,
+            timeForCheck,
         );
         expect(result.transactions).toHaveTransaction({
             from: userContracts[0].address,
@@ -301,7 +321,7 @@ describe('AlfaMaterCore', () => {
         expect(orderData.index).toStrictEqual(0);
         expect(orderData.masterAddress.toString()).toStrictEqual(master.address.toString());
         expect(orderData.status).toStrictEqual(Status.moderation);
-        expect(orderData.price).toStrictEqual(toNano('0.05'));
+        expect(orderData.price).toStrictEqual(orderPrice);
         expect(orderData.deadline).toStrictEqual(deadline);
         expect(orderData.customerAddress.toString()).toStrictEqual(users[0].address.toString());
         expect(orderData.freelancerAddress).toBeNull();
@@ -325,7 +345,7 @@ describe('AlfaMaterCore', () => {
     });
 
     it('should activate order', async () => {
-        const result = await adminContracts[1].sendActivateOrder(admins[1].getSender(), toNano('0.05'), 3, 0);
+        const result = await adminContracts[1].sendActivateOrder(admins[1].getSender(), toNano('0.1'), 3, 0);
         expect(result.transactions).toHaveTransaction({
             from: adminContracts[1].address,
             to: master.address,
@@ -352,16 +372,22 @@ describe('AlfaMaterCore', () => {
         expect(categoryData.activeOrderCount).toStrictEqual(1);
 
         printTransactionFees(result.transactions, 'activating order', addresses);
+        beforeOrderStart = blockchain.snapshot();
     });
 
     it('should create 2 user and activate', async () => {
         const content = buildUserContent(true, true);
-        const result = await master.sendCreateUser(users[1].getSender(), toNano('0.05'), 3, content);
+        const masterBalanceBefore = (await blockchain.getContract(master.address)).balance;
+        const result = await master.sendCreateUser(users[1].getSender(), toNano('5'), 3, content);
         expect(result.transactions).toHaveTransaction({
             from: users[1].address,
             to: master.address,
             success: true,
         });
+        const txDescription = result.transactions[1].description as TransactionDescriptionGeneric;
+        expect((await blockchain.getContract(master.address)).balance).toStrictEqual(
+            masterBalanceBefore + userCreationFee - txDescription.storagePhase!.storageFeesCollected,
+        );
         const userContractAddress = getAddressBigInt(result.transactions[2].address);
         const userContract = blockchain.openContract(User.createFromAddress(userContractAddress));
         userContracts.push(userContract);
@@ -386,6 +412,8 @@ describe('AlfaMaterCore', () => {
     it('should add response', async () => {
         const content = buildResponseContent({
             text: 'test response',
+            price: toNano(2),
+            deadline: Math.floor(Date.now() / 1000) + 120,
         });
         const result = await userContracts[1].sendAddResponse(users[1].getSender(), toNano('0.05'), 3, 0, content);
         expect(result.transactions).toHaveTransaction({
@@ -430,7 +458,7 @@ describe('AlfaMaterCore', () => {
             users[0].getSender(),
             toNano('2'),
             3,
-            toNano(1),
+            orderPrice,
             deadline,
             users[2].address,
         );
@@ -445,7 +473,7 @@ describe('AlfaMaterCore', () => {
             users[0].getSender(),
             toNano('2'),
             3,
-            toNano(1),
+            orderPrice,
             deadline,
             users[1].address,
         );
@@ -464,7 +492,7 @@ describe('AlfaMaterCore', () => {
         expect(orderData.status).toStrictEqual(Status.waiting_freelancer);
         expect(orderData.freelancerAddress!.toString()).toStrictEqual(users[1].address.toString());
         expect(orderData.deadline).toStrictEqual(deadline);
-        expect(orderData.price).toStrictEqual(toNano(1));
+        expect(orderData.price).toStrictEqual(orderPrice);
     });
 
     it('reject order', async () => {
@@ -483,7 +511,7 @@ describe('AlfaMaterCore', () => {
             users[0].getSender(),
             toNano('2'),
             3,
-            toNano(1),
+            orderPrice,
             deadline,
             users[1].address,
         );
@@ -502,7 +530,7 @@ describe('AlfaMaterCore', () => {
             users[0].getSender(),
             toNano('2'),
             3,
-            toNano(1),
+            orderPrice,
             deadline,
             users[1].address,
         );
@@ -517,13 +545,14 @@ describe('AlfaMaterCore', () => {
             to: master.address,
             success: true,
             op: OPCODES.ORDER_FEE,
-            value: (toNano(1) * BigInt(protocolFeeNumerator)) / BigInt(protocolFeeDenominator),
+            value: (orderPrice * BigInt(orderFeeNumerator)) / BigInt(orderFeeDenominator),
         });
         const orderData = await orderContracts[0].getOrderData();
         expect(orderData.status).toStrictEqual(Status.in_progress);
     });
 
     it('complete order', async () => {
+        beforeOrderComplete = blockchain.snapshot();
         let result = await orderContracts[0].sendCompleteOrder(users[0].getSender(), toNano('0.05'), 3);
         expect(result.transactions).toHaveTransaction({
             from: users[0].address,
@@ -555,6 +584,7 @@ describe('AlfaMaterCore', () => {
             to: users[1].address,
             success: true,
             op: OPCODES.ORDER_COMPLETED,
+            value: orderPrice - (orderPrice * BigInt(orderFeeNumerator)) / BigInt(orderFeeDenominator),
         });
         expect(result.transactions).toHaveTransaction({
             from: orderContracts[0].address,
@@ -625,8 +655,8 @@ describe('AlfaMaterCore', () => {
             toNano('0.05'),
             3,
             0,
-            70,
             30,
+            70,
         );
         expect(result.transactions).toHaveTransaction({
             from: admins[1].address,
@@ -645,17 +675,20 @@ describe('AlfaMaterCore', () => {
             success: true,
             op: OPCODES.PROCESS_ARBITRATION,
         });
+        const payment = orderPrice - (orderPrice * BigInt(orderFeeNumerator)) / BigInt(orderFeeDenominator);
         expect(result.transactions).toHaveTransaction({
             from: orderContracts[0].address,
             to: users[0].address,
             success: true,
             op: OPCODES.ORDER_COMPLETED,
+            value: (payment * BigInt(30)) / BigInt(100),
         });
         expect(result.transactions).toHaveTransaction({
             from: orderContracts[0].address,
             to: users[1].address,
             success: true,
             op: OPCODES.ORDER_COMPLETED,
+            value: (payment * BigInt(70)) / BigInt(100),
         });
         expect(result.transactions).toHaveTransaction({
             from: orderContracts[0].address,
@@ -671,6 +704,78 @@ describe('AlfaMaterCore', () => {
         expect(categoryData.activeOrderCount).toStrictEqual(0);
 
         printTransactionFees(result.transactions, 'arbitration processing', addresses);
+        await blockchain.loadFrom(beforeOrderComplete);
+    });
+
+    it('refund after deadline', async () => {
+        blockchain.now = Math.floor(Date.now() / 1000) + 1000;
+        const result = await orderContracts[0].sendRefund(users[0].getSender(), toNano('0.05'), 3);
+        expect(result.transactions).toHaveTransaction({
+            from: users[0].address,
+            to: orderContracts[0].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: users[0].address,
+            success: true,
+            op: OPCODES.ORDER_COMPLETED,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: master.address,
+            success: true,
+            op: OPCODES.ORDER_COMPLETED_NOTIFICATION,
+        });
+
+        const orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.refunded);
+        await blockchain.loadFrom(beforeOrderComplete);
+    });
+
+    it('force payment after check time', async () => {
+        await orderContracts[0].sendCompleteOrder(users[1].getSender(), toNano('0.05'), 3);
+        blockchain.now = Math.floor(Date.now() / 1000) + 1000;
+        const result = await orderContracts[0].sendForcePayment(users[1].getSender(), toNano('0.05'), 3);
+        expect(result.transactions).toHaveTransaction({
+            from: users[1].address,
+            to: orderContracts[0].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: users[1].address,
+            success: true,
+            op: OPCODES.ORDER_COMPLETED,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: master.address,
+            success: true,
+            op: OPCODES.ORDER_COMPLETED_NOTIFICATION,
+        });
+
+        const orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.payment_forced);
+    });
+
+    it('outdated order after deadline', async () => {
+        await blockchain.loadFrom(beforeOrderStart);
+        const result = await orderContracts[0].sendOutdated(2);
+        expect(result.transactions).toHaveTransaction({
+            to: orderContracts[0].address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: master.address,
+            success: true,
+            op: OPCODES.ORDER_COMPLETED_NOTIFICATION,
+        });
+
+        const orderData = await orderContracts[0].getOrderData();
+        expect(orderData.status).toStrictEqual(Status.outdated);
+        await blockchain.loadFrom(beforeOrderComplete);
     });
 
     it('revoke user by test admin', async () => {
@@ -747,5 +852,141 @@ describe('AlfaMaterCore', () => {
 
         let adminData = await adminContracts[0].getAdminData();
         expect(adminData.revokedAt).toStrictEqual(result.transactions[2].now);
+    });
+
+    it('moderation after user changes content', async () => {
+        const newContent = buildUserContent(true, false);
+        const result = await userContracts[1].sendChangeContent(users[1].getSender(), toNano('0.05'), 3, newContent);
+        expect(result.transactions).toHaveTransaction({
+            from: users[1].address,
+            to: userContracts[1].address,
+            success: true,
+        });
+
+        const userData = await userContracts[1].getUserData();
+        expect(userData.content.get(sha256Hash('is_user'))!.beginParse().loadBit()).toStrictEqual(true);
+        expect(userData.content.get(sha256Hash('is_freelancer'))!.beginParse().loadBit()).toStrictEqual(false);
+    });
+    it('change fees', async () => {
+        const result = await master.sendChangeFees(
+            root.getSender(),
+            toNano('0.05'),
+            3,
+            6,
+            50,
+            toNano('0.1'),
+            toNano('0.2'),
+        );
+        expect(result.transactions).toHaveTransaction({
+            from: root.address,
+            to: master.address,
+            success: true,
+        });
+
+        const masterData = await master.getMasterData();
+        expect(masterData.orderFeeNumerator).toStrictEqual(6);
+        expect(masterData.orderFeeDenominator).toStrictEqual(50);
+        expect(masterData.userCreationFee).toStrictEqual(toNano('0.1'));
+        expect(masterData.orderCreationFee).toStrictEqual(toNano('0.2'));
+    });
+
+    it('change category percent', async () => {
+        const result = await master.sendChangeCategoryPercent(root.getSender(), toNano('0.05'), 1, 'test', 433333333);
+        expect(result.transactions).toHaveTransaction({
+            from: root.address,
+            to: master.address,
+            success: true,
+        });
+
+        const categoryData = await master.getCategoryData('test');
+        expect(categoryData.agreementPercentage).toStrictEqual(433333333);
+    });
+
+    it('disable category', async () => {
+        const result = await master.sendDeactivateCategory(root.getSender(), toNano('0.05'), 1, 'test');
+        expect(result.transactions).toHaveTransaction({
+            from: root.address,
+            to: master.address,
+            success: true,
+        });
+
+        const categoryData = await master.getCategoryData('test');
+        expect(categoryData.active).toStrictEqual(false);
+    });
+
+    it('enable category', async () => {
+        const result = await master.sendActivateCategory(root.getSender(), toNano('0.05'), 1, 'test');
+        expect(result.transactions).toHaveTransaction({
+            from: root.address,
+            to: master.address,
+            success: true,
+        });
+
+        const categoryData = await master.getCategoryData('test');
+        expect(categoryData.active).toStrictEqual(true);
+    });
+
+    it('delete category', async () => {
+        let result = await master.sendDeleteCategory(root.getSender(), toNano('0.05'), 1, 'test');
+        expect(result.transactions).toHaveTransaction({
+            from: root.address,
+            to: master.address,
+            success: false,
+            exitCode: ERRORS.DELETION_NOT_ALLOWED,
+        });
+
+        await blockchain.loadFrom(beforeOrderStart);
+        blockchain.now = Math.floor(Date.now() / 1000) + 1000;
+        await orderContracts[0].sendOutdated(2);
+        await master.sendRevokeAdmin(root.getSender(), toNano('0.05'), 3, 1);
+
+        result = await master.sendDeleteCategory(root.getSender(), toNano('0.05'), 1, 'test');
+        expect(result.transactions).toHaveTransaction({
+            from: root.address,
+            to: master.address,
+            success: true,
+        });
+
+        const masterData = await master.getMasterData();
+        console.log(masterData.categories);
+        expect(masterData.categories!.size).toStrictEqual(1);
+    });
+
+    it('withdraw funds from protocol', async () => {
+        const result = await master.sendWithdrawFunds(root.getSender(), toNano('0.05'), 2);
+        expect(result.transactions).toHaveTransaction({
+            from: root.address,
+            to: master.address,
+            success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: master.address,
+            to: root.address,
+            success: true,
+        });
+
+        expect((await blockchain.getContract(master.address)).balance).toStrictEqual(toNano(0.1));
+    });
+
+    it('81', async () => {
+        const masterBalanceBefore = (await blockchain.getContract(master.address)).balance;
+        const result = await master.send81(user81.getSender(), toNano(81.1), 81);
+        expect(result.transactions).toHaveTransaction({
+            from: user81.address,
+            to: master.address,
+            success: true,
+            exitCode: 81,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: master.address,
+            to: user81.address,
+            success: true,
+        });
+
+        const txDescription = result.transactions[1].description as TransactionDescriptionGeneric;
+        expect((await blockchain.getContract(master.address)).balance).toStrictEqual(
+            masterBalanceBefore + toNano(81) - txDescription.storagePhase!.storageFeesCollected,
+        );
+        printTransactionFees(result.transactions, '81', addresses);
     });
 });

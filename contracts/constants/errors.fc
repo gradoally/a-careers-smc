@@ -8,6 +8,7 @@ const int error::category_not_active = 407;
 ;; --------------- Order ---------------
 const int error::invalid_status = 501;
 const int error::freelancer_not_found = 502;
+const int error::too_early = 503;
 
 ;; --------------- Master ---------------
 const int error::invalid_parts = 701;

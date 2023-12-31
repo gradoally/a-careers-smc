@@ -18,11 +18,14 @@ import { sha256Hash } from '../tests/utils/helpers';
 
 export type MasterConfig = {
     rootAddress: Address;
+    address81: Address;
     orderCode: Cell;
     userCode: Cell;
     adminCode: Cell;
-    feeNumerator: number;
-    feeDenominator: number;
+    orderFeeNumerator: number;
+    orderFeeDenominator: number;
+    userCreationFee: bigint;
+    orderCreationFee: bigint;
 };
 
 export type Indexes = {
@@ -47,8 +50,10 @@ export type CategoryValue = {
 export type MasterData = {
     rootAddress: Address;
     categories: Dictionary<bigint, CategoryValue> | undefined;
-    feeNumerator: number;
-    feeDenominator: number;
+    orderFeeNumerator: number;
+    orderFeeDenominator: number;
+    userCreationFee: bigint;
+    orderCreationFee: bigint;
 };
 
 export function createCategoryValue(): DictionaryValue<CategoryValue> {
@@ -77,11 +82,14 @@ export function masterConfigToCell(config: MasterConfig): Cell {
 
     return beginCell()
         .storeAddress(config.rootAddress)
+        .storeAddress(config.address81)
         .storeRef(codes)
         .storeRef(indexes)
         .storeUint(0, 1)
-        .storeUint(config.feeNumerator, 8)
-        .storeUint(config.feeDenominator, 8)
+        .storeUint(config.orderFeeNumerator, 8)
+        .storeUint(config.orderFeeDenominator, 8)
+        .storeCoins(config.userCreationFee)
+        .storeCoins(config.orderCreationFee)
         .endCell();
 }
 
@@ -173,6 +181,119 @@ export class Master implements Contract {
         });
     }
 
+    async sendChangeFees(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        orderFeeNumerator: number,
+        orderFeeDenominator: number,
+        userCreationFee: bigint,
+        orderCreationFee: bigint,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.CHANGE_FEES, 32)
+                .storeUint(queryID, 64)
+                .storeUint(orderFeeNumerator, 8)
+                .storeUint(orderFeeDenominator, 8)
+                .storeCoins(userCreationFee)
+                .storeCoins(orderCreationFee)
+                .endCell(),
+        });
+    }
+    async sendChangeCategoryPercent(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        category: string,
+        agreementPercentage: number,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.CHANGE_CATEGORY_PERCENT, 32)
+                .storeUint(queryID, 64)
+                .storeUint(sha256Hash(category), 256)
+                .storeUint(agreementPercentage, 64)
+                .endCell(),
+        });
+    }
+
+    async sendDeactivateCategory(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        category: string,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.DEACTIVATE_CATEGORY, 32)
+                .storeUint(queryID, 64)
+                .storeUint(sha256Hash(category), 256)
+                .endCell(),
+        });
+    }
+
+    async sendActivateCategory(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        category: string,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.ACTIVATE_CATEGORY, 32)
+                .storeUint(queryID, 64)
+                .storeUint(sha256Hash(category), 256)
+                .endCell(),
+        });
+    }
+
+    async sendDeleteCategory(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        category: string,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.DELETE_CATEGORY, 32)
+                .storeUint(queryID, 64)
+                .storeUint(sha256Hash(category), 256)
+                .endCell(),
+        });
+    }
+
+    async sendWithdrawFunds(provider: ContractProvider, via: Sender, value: bigint, queryID: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell().storeUint(OPCODES.WITHDRAW_FUNDS, 32).storeUint(queryID, 64).endCell(),
+        });
+    }
+
+    async send81(provider: ContractProvider, via: Sender, value: bigint, queryID: number) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell().storeUint(81, 32).storeUint(queryID, 64).endCell(),
+        });
+    }
+
     async getIndexes(provider: ContractProvider): Promise<Indexes> {
         const result = await provider.get('get_indexes', []);
 
@@ -209,8 +330,10 @@ export class Master implements Contract {
 
         const rootAddress = result.stack.readAddress();
         const categoriesDict = result.stack.readCellOpt();
-        const feeNumerator = result.stack.readNumber();
-        const feeDenominator = result.stack.readNumber();
+        const orderFeeNumerator = result.stack.readNumber();
+        const orderFeeDenominator = result.stack.readNumber();
+        const userCreationFee = result.stack.readBigNumber();
+        const orderCreationFee = result.stack.readBigNumber();
 
         if (categoriesDict) {
             const categories = categoriesDict
@@ -219,16 +342,20 @@ export class Master implements Contract {
             return {
                 rootAddress,
                 categories,
-                feeNumerator,
-                feeDenominator,
+                orderFeeNumerator,
+                orderFeeDenominator,
+                userCreationFee,
+                orderCreationFee,
             };
         }
 
         return {
             rootAddress,
             categories: undefined,
-            feeNumerator,
-            feeDenominator,
+            orderFeeNumerator,
+            orderFeeDenominator,
+            userCreationFee,
+            orderCreationFee,
         };
     }
 }

@@ -106,8 +106,8 @@ export class Admin implements Contract {
         value: bigint,
         queryID: number,
         orderIndex: number,
-        freelancerPart: number,
         customerPart: number,
+        freelancerPart: number,
     ) {
         await provider.internal(via, {
             value,
