@@ -45,6 +45,9 @@ describe('AlfaMaterCore', () => {
         adminCode = await compile('Admin');
         userCode = await compile('User');
         orderCode = await compile('Order');
+        console.log('Admin code (hex):' + adminCode.toBoc().toString('hex'));
+        console.log('User code (hex):' + userCode.toBoc().toString('hex'));
+        console.log('Order code (hex):' + orderCode.toBoc().toString('hex'));
 
         blockchain = await Blockchain.create();
 
