@@ -5,7 +5,7 @@ import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 import { printTransactionFees } from './utils/printTransactionFees';
 import { buildAdminContent, buildOrderContent, buildResponseContent, buildUserContent } from './utils/buildContent';
-import { getAddressBigInt, sha256Hash } from './utils/helpers';
+import { getAddressBigInt, sha256Hash } from '../wrappers/Helpers';
 import { Admin } from '../wrappers/Admin';
 import { User } from '../wrappers/User';
 import { Order, Status } from '../wrappers/Order';

@@ -14,7 +14,7 @@ import {
     toNano,
 } from '@ton/core';
 import { OPCODES } from './Config';
-import { sha256Hash } from '../tests/utils/helpers';
+import { sha256Hash } from './Helpers';
 
 export type MasterConfig = {
     rootAddress: Address;

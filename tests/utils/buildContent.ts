@@ -1,5 +1,5 @@
 import { beginCell, Builder, Cell, Dictionary, Slice } from '@ton/core';
-import { sha256Hash } from './helpers';
+import { sha256Hash } from '../../wrappers/Helpers';
 
 export type AdminData = {
     category: string;
