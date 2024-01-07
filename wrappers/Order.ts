@@ -15,20 +15,6 @@ import { OPCODES } from './Config';
 
 export type OrderConfig = {};
 
-/*
-const int status::moderation = 0;
-const int status::active = 1;
-const int status::waiting_freelancer = 2;
-const int status::in_progress = 3;
-const int status::fulfilled = 4;
-const int status::refunded = 5;
-const int status::completed = 6;
-const int status::payment_forced = 7;
-const int status::pre_arbitration = 8;
-const int status::on_arbitration = 9;
-const int status::arbitration_solved = 10;
- */
-
 export enum Status {
     moderation = 0,
     active = 1,
@@ -185,8 +171,8 @@ export class Order implements Contract {
         });
     }
 
-    async sendOutdated(provider: ContractProvider, queryID: 2) {
-        await provider.external(beginCell().storeUint(2, 64).endCell());
+    async sendOutdated(provider: ContractProvider, queryID: number) {
+        await provider.external(beginCell().storeUint(queryID, 64).endCell());
     }
 
     async getOrderData(provider: ContractProvider): Promise<OrderData> {
