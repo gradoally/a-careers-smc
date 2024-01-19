@@ -5,6 +5,34 @@ export type AdminData = {
     category: string;
     canApproveUser: boolean;
     canRevokeUser: boolean;
+    nickname: string;
+    about: string;
+    website: string;
+    portfolio: string;
+    resume: string;
+    specialization: string;
+};
+
+export type UserData = {
+    isUser: boolean;
+    isFreelancer: boolean;
+    nickname: string;
+    telegram: string;
+    about: string;
+    website: string;
+    portfolio: string;
+    resume: string;
+    specialization: string;
+};
+
+export type OrderData = {
+    category: string;
+    language: string;
+    name: string;
+    price: bigint;
+    deadline: number;
+    description: string;
+    technicalTask: string;
 };
 
 export type ResponseData = {
@@ -18,21 +46,40 @@ export function buildAdminContent(data: AdminData): Cell {
     content.set(sha256Hash('category'), beginCell().storeUint(sha256Hash(data.category), 256).endCell());
     content.set(sha256Hash('can_approve_user'), beginCell().storeBit(data.canApproveUser).endCell());
     content.set(sha256Hash('can_revoke_user'), beginCell().storeBit(data.canRevokeUser).endCell());
+    content.set(sha256Hash('nickname'), beginCell().storeStringTail(data.nickname).endCell());
+    content.set(sha256Hash('about'), beginCell().storeStringTail(data.about).endCell());
+    content.set(sha256Hash('website'), beginCell().storeStringTail(data.website).endCell());
+    content.set(sha256Hash('portfolio'), beginCell().storeStringTail(data.portfolio).endCell());
+    content.set(sha256Hash('resume'), beginCell().storeStringTail(data.resume).endCell());
+    content.set(sha256Hash('specialization'), beginCell().storeStringTail(data.specialization).endCell());
 
     return beginCell().storeDictDirect(content, Dictionary.Keys.BigUint(256), Dictionary.Values.Cell()).endCell();
 }
 
-export function buildUserContent(isUser: boolean, isFreelancer: boolean): Cell {
+export function buildUserContent(data: UserData): Cell {
     const content = Dictionary.empty<bigint, Cell>();
-    content.set(sha256Hash('is_user'), beginCell().storeBit(isUser).endCell());
-    content.set(sha256Hash('is_freelancer'), beginCell().storeBit(isFreelancer).endCell());
+    content.set(sha256Hash('is_user'), beginCell().storeBit(data.isUser).endCell());
+    content.set(sha256Hash('is_freelancer'), beginCell().storeBit(data.isFreelancer).endCell());
+    content.set(sha256Hash('nickname'), beginCell().storeStringTail(data.nickname).endCell());
+    content.set(sha256Hash('telegram'), beginCell().storeStringTail(data.telegram).endCell());
+    content.set(sha256Hash('about'), beginCell().storeStringTail(data.about).endCell());
+    content.set(sha256Hash('website'), beginCell().storeStringTail(data.website).endCell());
+    content.set(sha256Hash('portfolio'), beginCell().storeStringTail(data.portfolio).endCell());
+    content.set(sha256Hash('resume'), beginCell().storeStringTail(data.resume).endCell());
+    content.set(sha256Hash('specialization'), beginCell().storeStringTail(data.specialization).endCell());
 
     return beginCell().storeDictDirect(content, Dictionary.Keys.BigUint(256), Dictionary.Values.Cell()).endCell();
 }
 
-export function buildOrderContent(category: string): Cell {
+export function buildOrderContent(data: OrderData): Cell {
     const content = Dictionary.empty<bigint, Cell>();
-    content.set(sha256Hash('category'), beginCell().storeUint(sha256Hash(category), 256).endCell());
+    content.set(sha256Hash('category'), beginCell().storeUint(sha256Hash(data.category), 256).endCell());
+    content.set(sha256Hash('language'), beginCell().storeUint(sha256Hash(data.language), 256).endCell());
+    content.set(sha256Hash('name'), beginCell().storeStringTail(data.name).endCell());
+    content.set(sha256Hash('price'), beginCell().storeCoins(data.price).endCell());
+    content.set(sha256Hash('deadline'), beginCell().storeUint(data.deadline, 32).endCell());
+    content.set(sha256Hash('description'), beginCell().storeStringTail(data.description).endCell());
+    content.set(sha256Hash('technical_task'), beginCell().storeStringTail(data.technicalTask).endCell());
 
     return beginCell().storeDictDirect(content, Dictionary.Keys.BigUint(256), Dictionary.Values.Cell()).endCell();
 }

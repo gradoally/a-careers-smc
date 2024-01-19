@@ -40,10 +40,23 @@ async function buildContentForAdmin(provider: NetworkProvider) {
     const category = await ui.input('Category:');
     const canApproveUser = await ui.prompt('Can approve user:');
     const canRevokeUser = await ui.prompt('Can revoke user:');
+    const nickname = await ui.input('Nickname:');
+    const about = await ui.input('About:');
+    const website = await ui.input('Website:');
+    const portfolio = await ui.input('Portfolio:');
+    const resume = await ui.input('Resume:');
+    const specialization = await ui.input('Specialization:');
+
     const data: AdminData = {
         category,
         canApproveUser,
         canRevokeUser,
+        nickname,
+        about,
+        website,
+        portfolio,
+        resume,
+        specialization,
     };
 
     const content = buildAdminContent(data);
@@ -54,16 +67,47 @@ async function buildContentForUser(provider: NetworkProvider) {
     const ui = provider.ui();
     const isUser = await ui.prompt('Is user:');
     const isFreelancer = await ui.prompt('Is freelancer:');
+    const nickname = await ui.input('Nickname:');
+    const telegram = await ui.input('Telegram:');
+    const about = await ui.input('About:');
+    const website = await ui.input('Website:');
+    const portfolio = await ui.input('Portfolio:');
+    const resume = await ui.input('Resume:');
+    const specialization = await ui.input('Specialization:');
 
-    const content = buildUserContent(isUser, isFreelancer);
+    const content = buildUserContent({
+        isUser,
+        isFreelancer,
+        nickname,
+        telegram,
+        about,
+        website,
+        portfolio,
+        resume,
+        specialization,
+    });
     ui.write(content.toBoc().toString('hex'));
 }
 
 async function buildContentForOrder(provider: NetworkProvider) {
     const ui = provider.ui();
     const category = await ui.input('Category:');
+    const language = await ui.input('Language:');
+    const name = await ui.input('Name:');
+    const price = toNano(await ui.input('Price:'));
+    const deadline = parseInt(await ui.input('Deadline:'));
+    const description = await ui.input('Description:');
+    const technicalTask = await ui.input('Technical task:');
 
-    const content = buildOrderContent(category);
+    const content = buildOrderContent({
+        category,
+        language,
+        name,
+        price,
+        deadline,
+        description,
+        technicalTask,
+    });
     ui.write(content.toBoc().toString('hex'));
 }
 

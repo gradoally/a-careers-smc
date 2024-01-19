@@ -135,6 +135,12 @@ describe('AlfaMaterCore', () => {
             category: 'all',
             canApproveUser: true,
             canRevokeUser: true,
+            nickname: 'test',
+            about: 'test',
+            website: 'test',
+            portfolio: 'test',
+            resume: 'test',
+            specialization: 'test',
         });
         const result = await master.sendCreateAdmin(root.getSender(), toNano('0.05'), 3, content, admins[0].address);
         expect(result.transactions).toHaveTransaction({
@@ -168,6 +174,12 @@ describe('AlfaMaterCore', () => {
             category: 'all',
             canApproveUser: true,
             canRevokeUser: true,
+            nickname: 'test',
+            about: 'test',
+            website: 'test',
+            portfolio: 'test',
+            resume: 'test',
+            specialization: 'test',
         });
         const result = await adminContracts[0].sendCreateAdmin(
             admins[0].getSender(),
@@ -204,10 +216,16 @@ describe('AlfaMaterCore', () => {
             category: 'test',
             canApproveUser: true,
             canRevokeUser: true,
+            nickname: 'test',
+            about: 'test',
+            website: 'test',
+            portfolio: 'test',
+            resume: 'test',
+            specialization: 'test',
         });
         const result = await adminContracts[0].sendCreateAdmin(
             admins[0].getSender(),
-            toNano('0.05'),
+            toNano('0.1'),
             3,
             content,
             admins[1].address,
@@ -242,7 +260,17 @@ describe('AlfaMaterCore', () => {
     });
 
     it('should create user', async () => {
-        const content = buildUserContent(true, true);
+        const content = buildUserContent({
+            isUser: true,
+            isFreelancer: true,
+            nickname: 'test',
+            telegram: 'test',
+            about: 'test',
+            website: 'test',
+            portfolio: 'test',
+            resume: 'test',
+            specialization: 'test',
+        });
         const masterBalanceBefore = (await blockchain.getContract(master.address)).balance;
         const result = await master.sendCreateUser(users[0].getSender(), toNano('4'), 3, content);
         expect(result.transactions).toHaveTransaction({
@@ -296,7 +324,15 @@ describe('AlfaMaterCore', () => {
      */
 
     it('should create order', async () => {
-        const content = buildOrderContent('test');
+        const content = buildOrderContent({
+            category: 'test',
+            name: 'test',
+            price: toNano('10'),
+            deadline: Math.floor(Date.now() / 1000) + 100,
+            description: 'test',
+            technicalTask: 'test',
+            language: 'en',
+        });
         const deadline = Math.floor(Date.now() / 1000) + 100;
         const timeForCheck = 100;
         const result = await userContracts[0].sendCreateOrder(
@@ -379,7 +415,17 @@ describe('AlfaMaterCore', () => {
     });
 
     it('should create 2 user and activate', async () => {
-        const content = buildUserContent(true, true);
+        const content = buildUserContent({
+            isUser: true,
+            isFreelancer: true,
+            nickname: 'test',
+            telegram: 'test',
+            about: 'test',
+            website: 'test',
+            portfolio: 'test',
+            resume: 'test',
+            specialization: 'test',
+        });
         const masterBalanceBefore = (await blockchain.getContract(master.address)).balance;
         const result = await master.sendCreateUser(users[1].getSender(), toNano('5'), 3, content);
         expect(result.transactions).toHaveTransaction({
@@ -858,7 +904,17 @@ describe('AlfaMaterCore', () => {
     });
 
     it('moderation after user changes content', async () => {
-        const newContent = buildUserContent(true, false);
+        const newContent = buildUserContent({
+            isUser: true,
+            isFreelancer: false,
+            nickname: 'test',
+            telegram: 'test',
+            about: 'test',
+            website: 'test',
+            portfolio: 'test',
+            resume: 'test',
+            specialization: 'test',
+        });
         const result = await userContracts[1].sendChangeContent(users[1].getSender(), toNano('0.05'), 3, newContent);
         expect(result.transactions).toHaveTransaction({
             from: users[1].address,
