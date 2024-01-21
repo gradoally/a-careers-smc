@@ -21,6 +21,7 @@ global cell storage::content;
 global cell storage::responses;
 global int storage::responses_count;
 global int storage::completed_at;
+global int storage::admin_count_for_active;
 
 global int storage::admin_voted_count;
 global int storage::freelancer_part;
@@ -55,6 +56,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::admin_count = ds~load_uint(64);
         storage::responses_count = ds~load_uint(8);
         storage::completed_at = ds~load_uint(32);
+        storage::admin_count_for_active = ds~load_uint(16);
 
         slice arbitration_data = ds~load_ref().begin_parse();
         storage::admin_voted_count = arbitration_data~load_uint(64);
@@ -96,6 +98,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         .store_uint(storage::responses_count, 8)
         .store_ref(arbitration_data)
         .store_uint(storage::completed_at, 32)
+        .store_uint(storage::admin_count_for_active, 16)
         .end_cell()
     );
 }
@@ -142,6 +145,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         storage::time_for_check = in_msg_body~load_uint(32);
         storage::protocol_fee_numerator = in_msg_body~load_uint(8);
         storage::protocol_fee_denominator = in_msg_body~load_uint(8);
+        storage::admin_count_for_active = in_msg_body~load_uint(16);
         storage::responses = null();
         storage::responses_count = 0;
         storage::status = status::moderation;
@@ -164,16 +168,25 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         throw_unless(error::invalid_status, storage::status == status::moderation);
         int admin_category = in_msg_body~load_uint(256);
         validate_caterogy(admin_category);
-        storage::status = status::active;
+        (_, int f) = storage::responses.dict_get?(267, sender_address);
+        throw_unless(error::already_responded, f == false);
+        storage::responses~dict_set(267, sender_address, begin_cell().end_cell().begin_parse());
+        storage::admin_voted_count += 1;
 
-        cell body = begin_cell()
+        if (storage::admin_voted_count == storage::admin_count_for_active) {
+            storage::status = status::active;
+            storage::responses = null();
+            storage::admin_voted_count = 0;
+
+            cell body = begin_cell()
             .store_uint(op::order_activate_notification, 32)
             .store_uint(query_id, 64)
             .store_uint(storage::index, 64)
             .store_uint(get_my_category(), 256)
             .end_cell();
-        messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
-        save_data();
+            messages::send_simple_non_bounceable(storage::master_address, 0, null(), body, 64);
+            save_data();
+        }
         return ();
     }
 
@@ -325,11 +338,15 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
         throw_unless(error::invalid_status, storage::status == status::on_arbitration);
         int admin_category = in_msg_body~load_uint(256);
         validate_caterogy(admin_category);
+        (_, int f) = storage::responses.dict_get?(267, sender_address);
+        throw_unless(error::already_responded, f == false);
+        storage::responses~dict_set(267, sender_address, begin_cell().end_cell().begin_parse());
 
         storage::freelancer_part += in_msg_body~load_uint(8);
         storage::customer_part += in_msg_body~load_uint(8);
         storage::admin_voted_count += 1;
         if((storage::admin_voted_count * const::scale_factor / storage::admin_count) >= storage::agreement_perc) {
+            storage::responses = null();
             int payment = get_payment();
             int customer_part = payment * storage::customer_part / storage::admin_voted_count / 100;
             int freelancer_part = payment - customer_part;

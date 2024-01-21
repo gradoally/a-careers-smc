@@ -116,7 +116,7 @@ describe('AlfaMaterCore', () => {
     });
 
     it('should create category all', async () => {
-        const result = await master.sendCreateCategory(root.getSender(), toNano('0.05'), 3, 'all', 666666667);
+        const result = await master.sendCreateCategory(root.getSender(), toNano('0.05'), 3, 'all', 666666667, 1);
         expect(result.transactions).toHaveTransaction({
             from: root.address,
             to: master.address,
@@ -128,6 +128,7 @@ describe('AlfaMaterCore', () => {
         expect(categoryData.adminCount).toStrictEqual(0);
         expect(categoryData.activeOrderCount).toStrictEqual(0);
         expect(categoryData.agreementPercentage).toStrictEqual(666666667);
+        expect(categoryData.adminCountForActive).toStrictEqual(1);
     });
 
     it('should create admin with root', async () => {
@@ -142,7 +143,7 @@ describe('AlfaMaterCore', () => {
             resume: 'test',
             specialization: 'test',
         });
-        const result = await master.sendCreateAdmin(root.getSender(), toNano('0.05'), 3, content, admins[0].address);
+        const result = await master.sendCreateAdmin(root.getSender(), toNano('1'), 3, content, admins[0].address);
         expect(result.transactions).toHaveTransaction({
             from: root.address,
             to: master.address,
@@ -167,6 +168,8 @@ describe('AlfaMaterCore', () => {
 
         const masterData = await master.getIndexes();
         expect(masterData.adminNextIndex).toStrictEqual(1);
+
+        printTransactionFees(result.transactions, 'creating admin by root', addresses);
     });
 
     it('all admin can not create another all admin', async () => {
@@ -183,7 +186,7 @@ describe('AlfaMaterCore', () => {
         });
         const result = await adminContracts[0].sendCreateAdmin(
             admins[0].getSender(),
-            toNano('0.05'),
+            toNano('1'),
             4,
             content,
             admins[1].address,
@@ -197,7 +200,7 @@ describe('AlfaMaterCore', () => {
     });
 
     it('should create category test', async () => {
-        const result = await master.sendCreateCategory(root.getSender(), toNano('0.05'), 3, 'test', 333333333);
+        const result = await master.sendCreateCategory(root.getSender(), toNano('0.05'), 3, 'test', 333333333, 1);
         expect(result.transactions).toHaveTransaction({
             from: root.address,
             to: master.address,
@@ -225,7 +228,7 @@ describe('AlfaMaterCore', () => {
         });
         const result = await adminContracts[0].sendCreateAdmin(
             admins[0].getSender(),
-            toNano('0.1'),
+            toNano('1'),
             3,
             content,
             admins[1].address,
@@ -316,6 +319,8 @@ describe('AlfaMaterCore', () => {
 
         const userData = await userContracts[0].getUserData();
         expect(userData.revokedAt).toStrictEqual(0);
+
+        printTransactionFees(result.transactions, 'activating user', addresses);
     });
 
     /*
@@ -381,6 +386,8 @@ describe('AlfaMaterCore', () => {
 
         const masterData = await master.getIndexes();
         expect(masterData.orderNextIndex).toStrictEqual(1);
+
+        printTransactionFees(result.transactions, 'creating order', addresses);
     });
 
     it('should activate order', async () => {
@@ -412,6 +419,8 @@ describe('AlfaMaterCore', () => {
 
         printTransactionFees(result.transactions, 'activating order', addresses);
         beforeOrderStart = blockchain.snapshot();
+
+        printTransactionFees(result.transactions, 'activating order', addresses);
     });
 
     it('should create 2 user and activate', async () => {
@@ -542,6 +551,8 @@ describe('AlfaMaterCore', () => {
         expect(orderData.freelancerAddress!.toString()).toStrictEqual(users[1].address.toString());
         expect(orderData.deadline).toStrictEqual(deadline);
         expect(orderData.price).toStrictEqual(orderPrice);
+
+        printTransactionFees(result.transactions, 'assign user', addresses);
     });
 
     it('reject order', async () => {
@@ -699,14 +710,7 @@ describe('AlfaMaterCore', () => {
     });
 
     it('arbitration processing', async () => {
-        const result = await adminContracts[1].sendProcessArbitration(
-            admins[1].getSender(),
-            toNano('0.05'),
-            3,
-            0,
-            30,
-            70,
-        );
+        const result = await adminContracts[1].sendProcessArbitration(admins[1].getSender(), toNano('1'), 3, 0, 30, 70);
         expect(result.transactions).toHaveTransaction({
             from: admins[1].address,
             to: adminContracts[1].address,
@@ -754,6 +758,8 @@ describe('AlfaMaterCore', () => {
 
         printTransactionFees(result.transactions, 'arbitration processing', addresses);
         await blockchain.loadFrom(beforeOrderComplete);
+
+        printTransactionFees(result.transactions, 'arbitration processing', addresses);
     });
 
     it('refund after deadline', async () => {

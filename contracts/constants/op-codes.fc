@@ -39,6 +39,7 @@ const int op::create_user = 39;
 const int op::change_fees = 46;
 const int op::change_category_percent = 47;
 const int op::withdraw_funds = 48;
+const int op::change_category_count_for_activate = 49;
 
 ;; --------------- User ---------------
 

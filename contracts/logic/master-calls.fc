@@ -2,11 +2,14 @@
 
 () handle::admin_call(slice in_msg_body) impure inline {
     if (msg::op == op::create_admin_master) {
+        raw_reserve(0, 4);
         cell content = in_msg_body~load_dict();
+        slice creator_address = in_msg_body~load_msg_addr();
         slice admin_address = in_msg_body~load_msg_addr();
         in_msg_body.end_parse();
         create_admin(content, admin_address, false);
         storage::admin_next_index += 1;
+        messages::send_simple_bounceable(creator_address, 0, null(), null(), 128);
         save_data();
         return ();
     }
@@ -116,6 +119,7 @@
             .store_uint(time_for_check, 32)
             .store_uint(storage::order_fee_numerator, 8)
             .store_uint(storage::order_fee_denominator, 8)
+            .store_uint(category::admin_count_for_activate, 16)
             .end_cell();
         messages::send_simple_bounceable(order_address, 0, order_state_init, body, 128);
         storage::order_next_index += 1;

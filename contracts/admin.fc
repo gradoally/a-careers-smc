@@ -135,6 +135,7 @@ int get_category() inline {
                 .store_uint(query_id, 64)
                 .store_uint(storage::index, 64)
                 .store_dict(content)
+                .store_slice(storage::admin_address)
                 .store_slice(admin_address)
                 .end_cell();
             messages::send_simple_bounceable(storage::master_address, 0, null(), body, 64);

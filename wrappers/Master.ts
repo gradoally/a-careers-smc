@@ -45,6 +45,7 @@ export type CategoryValue = {
     adminCount: number;
     activeOrderCount: number;
     agreementPercentage: number;
+    adminCountForActive: number;
 };
 
 export type MasterData = {
@@ -63,6 +64,7 @@ export function createCategoryValue(): DictionaryValue<CategoryValue> {
             builder.storeUint(src.adminCount, 64);
             builder.storeUint(src.activeOrderCount, 64);
             builder.storeUint(src.agreementPercentage, 64);
+            builder.storeUint(src.adminCountForActive, 16);
         },
         parse: (src: Slice) => {
             return {
@@ -70,6 +72,7 @@ export function createCategoryValue(): DictionaryValue<CategoryValue> {
                 adminCount: src.loadUint(64),
                 activeOrderCount: src.loadUint(64),
                 agreementPercentage: src.loadUint(64),
+                adminCountForActive: src.loadUint(16),
             };
         },
     };
@@ -124,6 +127,7 @@ export class Master implements Contract {
         queryID: number,
         category: string,
         agreementPercentage: number,
+        adminCountForActive: number,
     ) {
         await provider.internal(via, {
             value,
@@ -133,6 +137,7 @@ export class Master implements Contract {
                 .storeUint(queryID, 64)
                 .storeUint(sha256Hash(category), 256)
                 .storeUint(agreementPercentage, 64)
+                .storeUint(adminCountForActive, 16)
                 .endCell(),
         });
     }
@@ -322,6 +327,7 @@ export class Master implements Contract {
             adminCount: result.stack.readNumber(),
             activeOrderCount: result.stack.readNumber(),
             agreementPercentage: result.stack.readNumber(),
+            adminCountForActive: result.stack.readNumber(),
         };
     }
 

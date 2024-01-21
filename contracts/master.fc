@@ -20,6 +20,7 @@ global int category::admin_count;
 global int category::active_order_count;
 global int category::hash;
 global int category::agreement_perc;
+global int category::admin_count_for_activate;
 
 global slice msg::sender_address;
 global int msg::op;
@@ -114,6 +115,7 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
         category::hash = in_msg_body~load_uint(256);
         category::agreement_perc = in_msg_body~load_uint(64);
+        category::admin_count_for_activate = in_msg_body~load_uint(16);
         in_msg_body.end_parse();
 
         (_, int f) = storage::categories.udict_get?(256, category::hash);
@@ -129,12 +131,14 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     if (msg::op == op::create_admin) {
         throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
         throw_unless(error::not_enough_ton, msg_value >= fee::admin_creation);
+        raw_reserve(0, 4);
         cell content = in_msg_body~load_dict();
         slice admin_address = in_msg_body~load_msg_addr();
         in_msg_body.end_parse();
         create_admin(content, admin_address, true);
         storage::admin_next_index += 1;
         save_data();
+        messages::send_simple_bounceable(msg::sender_address, 0, null(), null(), 128);
         return ();
     }
 
@@ -188,6 +192,18 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         in_msg_body.end_parse();
         load_category_data(category_hash);
         category::agreement_perc = agreement_perc;
+        save_category_data();
+        save_data();
+        return ();
+    }
+
+    if (msg::op == op::change_category_count_for_activate) {
+        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
+        int category_hash = in_msg_body~load_uint(256);
+        int admin_count_for_activate = in_msg_body~load_uint(16);
+        in_msg_body.end_parse();
+        load_category_data(category_hash);
+        category::admin_count_for_activate = admin_count_for_activate;
         save_category_data();
         save_data();
         return ();
@@ -277,10 +293,10 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     return (storage::order_code, storage::user_code, storage::admin_code);
 }
 
-(int, int, int, int) get_category_data(int category_hash) method_id {
+(int, int, int, int, int) get_category_data(int category_hash) method_id {
     load_data();
     load_category_data(category_hash);
-    return (category::active, category::admin_count, category::active_order_count, category::agreement_perc);
+    return (category::active, category::admin_count, category::active_order_count, category::agreement_perc, category::admin_count_for_activate);
 }
 
 (slice, cell, int, int, int, int) get_master_data() method_id {

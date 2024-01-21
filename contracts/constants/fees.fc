@@ -1,20 +1,20 @@
 ;; --------------- Order ---------------
-const int fee::assign_user = 1;
+const int fee::assign_user = 50000000; ;; 0.05 TON
 
 
 
 ;; --------------- Master ---------------
 
-const int fee::admin_creation = 1; ;; TODO: Change
-const int fee::user_creation = 1; ;; TODO: Change
+const int fee::admin_creation = 300000000; ;; 0.3 TON
+const int fee::user_creation = 200000000; ;; 0.2 TON
 
 ;; --------------- User ---------------
 
-const int fee::order_creation = 1;
+const int fee::order_creation = 200000000; ;; 0.2 TON
 
 
 ;; --------------- Admin ---------------
 
-const int fee::process_arbitration = 1;
-const int fee::order_activation = 2;
-const int fee::user_activation = 2;
+const int fee::process_arbitration = 100000000; ;; 0.1 TON
+const int fee::order_activation = 40000000; ;; 0.04 TON
+const int fee::user_activation = 60000000; ;; 0.06 TON

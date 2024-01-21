@@ -9,16 +9,18 @@
     category::admin_count = category_value~load_uint(64);
     category::active_order_count = category_value~load_uint(64);
     category::agreement_perc = category_value~load_uint(64);
+    category::admin_count_for_activate = category_value~load_uint(16);
 }
 
 () save_category_data() impure inline {
     slice category_data = begin_cell()
-    .store_int(category::active, 1)
-    .store_uint(category::admin_count, 64)
-    .store_uint(category::active_order_count, 64)
-    .store_uint(category::agreement_perc, 64)
-    .end_cell()
-    .begin_parse();
+        .store_int(category::active, 1)
+        .store_uint(category::admin_count, 64)
+        .store_uint(category::active_order_count, 64)
+        .store_uint(category::agreement_perc, 64)
+        .store_uint(category::admin_count_for_activate, 16)
+        .end_cell()
+        .begin_parse();
 
     storage::categories~udict_set(256, category::hash, category_data);
 }
@@ -37,8 +39,8 @@
     cell admin_state_init = calculate_contract_state_init(storage::admin_next_index, storage::admin_code);
     slice admin_contract_address = calculate_contract_address(admin_state_init);
     cell body = begin_cell()
-    .store_slice(admin_address)
-    .store_dict(content)
-    .end_cell();
-    messages::send_simple_bounceable(admin_contract_address, 0, admin_state_init, body, 64);
+        .store_slice(admin_address)
+        .store_dict(content)
+        .end_cell();
+    messages::send_simple_bounceable(admin_contract_address, 100000000, admin_state_init, body, 1);
 }
