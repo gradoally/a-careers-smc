@@ -17,6 +17,8 @@ const int error::category_not_exist = 703;
 const int error::deletion_not_allowed = 704;
 const int error::category_already_active = 705;
 const int error::category_already_inactive = 706;
+const int error::language_already_exist = 707;
+const int error::language_not_exist = 708;
 
 
 ;; --------------- Admin ---------------

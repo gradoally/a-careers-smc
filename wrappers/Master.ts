@@ -41,11 +41,17 @@ export type Codes = {
 };
 
 export type CategoryValue = {
+    name: string
     active: boolean;
     adminCount: number;
     activeOrderCount: number;
     agreementPercentage: number;
     adminCountForActive: number;
+};
+
+
+export type LanguageValue = {
+    name: string
 };
 
 export type MasterData = {
@@ -65,9 +71,11 @@ export function createCategoryValue(): DictionaryValue<CategoryValue> {
             builder.storeUint(src.activeOrderCount, 64);
             builder.storeUint(src.agreementPercentage, 64);
             builder.storeUint(src.adminCountForActive, 16);
+            builder.storeRef(beginCell().storeStringTail(src.name).endCell())
         },
         parse: (src: Slice) => {
             return {
+                name: src.loadRef().beginParse().loadStringTail(),
                 active: src.loadBoolean(),
                 adminCount: src.loadUint(64),
                 activeOrderCount: src.loadUint(64),
@@ -93,6 +101,7 @@ export function masterConfigToCell(config: MasterConfig): Cell {
         .storeUint(config.orderFeeDenominator, 8)
         .storeCoins(config.userCreationFee)
         .storeCoins(config.orderCreationFee)
+        .storeUint(0, 1)
         .endCell();
 }
 
@@ -138,6 +147,26 @@ export class Master implements Contract {
                 .storeUint(sha256Hash(category), 256)
                 .storeUint(agreementPercentage, 64)
                 .storeUint(adminCountForActive, 16)
+                .storeRef(beginCell().storeStringTail(category).endCell())
+                .endCell(),
+        });
+    }
+
+    async sendCreateLang(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        queryID: number,
+        lang: string,
+    ) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(OPCODES.CREATE_LANGUAGE, 32)
+                .storeUint(queryID, 64)
+                .storeUint(sha256Hash(lang), 256)
+                .storeRef(beginCell().storeStringTail(lang).endCell())
                 .endCell(),
         });
     }
@@ -323,11 +352,20 @@ export class Master implements Contract {
         const result = await provider.get('get_category_data', [{ type: 'int', value: sha256Hash(category) }]);
 
         return {
+            name: result.stack.readCell().beginParse().loadStringTail(),
             active: result.stack.readBoolean(),
             adminCount: result.stack.readNumber(),
             activeOrderCount: result.stack.readNumber(),
             agreementPercentage: result.stack.readNumber(),
             adminCountForActive: result.stack.readNumber(),
+        };
+    }
+
+    async getLanguageData(provider: ContractProvider, language: string): Promise<LanguageValue> {
+        const result = await provider.get('get_language_data', [{ type: 'int', value: sha256Hash(language) }]);
+
+        return {
+            name: result.stack.readCell().beginParse().loadStringTail()
         };
     }
 

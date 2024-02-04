@@ -631,3 +631,6 @@ builder store_true(builder b) impure asm "STONE";
 builder store_false(builder b) impure asm "STZERO";
 
 (slice, int) dict_get?(cell dict, int key_len, slice index) asm(index dict key_len) "DICTGET" "NULLSWAPIFNOT";
+
+(cell, int) dict_get_ref?(cell dict, int key_len, slice index) asm(index dict key_len) "DICTGETREF" "NULLSWAPIFNOT";
+(cell, int) udict_add_ref?(cell dict, int key_len, int index, cell value) asm(value index dict key_len) "DICTUADDREF";

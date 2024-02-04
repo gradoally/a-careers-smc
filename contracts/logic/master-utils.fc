@@ -10,6 +10,7 @@
     category::active_order_count = category_value~load_uint(64);
     category::agreement_perc = category_value~load_uint(64);
     category::admin_count_for_activate = category_value~load_uint(16);
+    category::name = category_value.preload_ref();
 }
 
 () save_category_data() impure inline {
@@ -19,6 +20,7 @@
         .store_uint(category::active_order_count, 64)
         .store_uint(category::agreement_perc, 64)
         .store_uint(category::admin_count_for_activate, 16)
+        .store_ref(category::name)
         .end_cell()
         .begin_parse();
 

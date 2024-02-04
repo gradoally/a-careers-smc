@@ -114,6 +114,19 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     }
 }
 
+() just_notify_master(int query_id, int op) impure inline {
+    builder msg = begin_cell()
+        .store_uint(flag::non_bounceable, 6)
+        .store_slice(storage::master_address)
+        .store_uint(0, 111)
+        .store_uint(op::master_log, 32)
+        .store_uint(op, 32)
+        .store_uint(query_id, 64)
+        .store_uint(storage::index, 64);
+
+    send_raw_message(msg.end_cell(), 1);
+}
+
 () notify_master_completion(int query_id, int amount, int mode) impure inline {
     cell body = begin_cell()
         .store_uint(op::order_completed_notification, 32)
@@ -137,6 +150,10 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     load_data();
     if (~ storage::init?) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
+        int op = in_msg_body~load_uint(32);
+        int query_id = in_msg_body~load_uint(64);
+        throw_unless(0xFFFF, op == op::init_order);
+        just_notify_master(query_id, op::init_order);
         storage::customer_address = in_msg_body~load_msg_addr();
         storage::freelancer_address = addr_none;
         storage::content = in_msg_body~load_dict();
@@ -191,6 +208,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     }
 
     if (op == op::add_response) {
+        just_notify_master(query_id, op);
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::active);
         throw_unless(error::too_many_responded, storage::responses_count < const::max_responses);
@@ -205,6 +223,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     }
 
     if (op == op::assign_user) {
+        just_notify_master(query_id, op);
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
         throw_unless(error::invalid_status, storage::status == status::active);
         storage::price = in_msg_body~load_coins();
@@ -240,6 +259,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     }
 
     if (op == op::reject_order) {
+        just_notify_master(query_id, op);
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::freelancer_address));
         throw_unless(error::invalid_status, storage::status == status::waiting_freelancer);
         messages::send_simple_non_bounceable(storage::customer_address, storage::price, null(), null(), 128);
@@ -249,6 +269,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     }
 
     if (op == op::cancel_assign) {
+        just_notify_master(query_id, op);
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
         throw_unless(error::invalid_status, storage::status == status::waiting_freelancer);
         messages::send_simple_non_bounceable(storage::customer_address, storage::price, null(), null(), 128);
@@ -272,10 +293,16 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     }
 
     if (op == op::complete_order) {
+        just_notify_master(query_id, op);
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::freelancer_address));
         throw_unless(error::invalid_status, storage::status == status::in_progress);
+        cell result = in_msg_body~load_ref();
+        in_msg_body.end_parse();
         storage::status = status::fulfilled;
         storage::completed_at = now();
+        (cell content, _) = storage::responses.dict_get_ref?(267, storage::freelancer_address);
+        content~udict_set_ref(256, hash::result, result);
+        storage::responses = storage::responses.dict_set_ref(267, storage::freelancer_address, content);
         save_data();
         return ();
     }
@@ -324,6 +351,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     }
 
     if (op == op::set_admins) {
+;;        just_notify_master(query_id, op); ;; not enough founds?
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::pre_arbitration);
         storage::admin_count = in_msg_body~load_uint(64);
@@ -334,6 +362,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     }
 
     if (op == op::process_arbitration) {
+        just_notify_master(query_id, op);
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::master_address));
         throw_unless(error::invalid_status, storage::status == status::on_arbitration);
         int admin_category = in_msg_body~load_uint(256);
@@ -405,4 +434,14 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
 (cell, int) get_responses() method_id {
     load_data();
     return (storage::responses, storage::responses_count);
+}
+
+cell get_result() method_id {
+    load_data();
+    (cell content, int f) = storage::responses.dict_get_ref?(267, storage::freelancer_address);
+    ifnot (f) {
+        return null();
+    }
+    (cell result, _) = content.udict_get_ref?(256, hash::result);
+    return result;
 }
