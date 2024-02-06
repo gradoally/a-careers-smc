@@ -200,18 +200,33 @@ describe('AlfaMaterCore', () => {
     });
 
     it('should create category test', async () => {
-        const result = await master.sendCreateCategory(root.getSender(), toNano('0.05'), 3, 'test', 333333333, 1);
+        const categoryName = 'test'; //.repeat(100);
+        const result = await master.sendCreateCategory(root.getSender(), toNano('0.05'), 3, categoryName, 333333333, 1);
         expect(result.transactions).toHaveTransaction({
             from: root.address,
             to: master.address,
             success: true,
         });
 
-        const categoryData = await master.getCategoryData('test');
+        const categoryData = await master.getCategoryData(categoryName);
+        expect(categoryData.name).toStrictEqual(categoryName);
         expect(categoryData.active).toStrictEqual(true);
         expect(categoryData.adminCount).toStrictEqual(0);
         expect(categoryData.activeOrderCount).toStrictEqual(0);
         expect(categoryData.agreementPercentage).toStrictEqual(333333333);
+    });
+
+    it('should create language test', async () => {
+        const langName = 'en'; //.repeat(100);
+        const result = await master.sendCreateLang(root.getSender(), toNano('0.05'), 3, langName);
+        expect(result.transactions).toHaveTransaction({
+            from: root.address,
+            to: master.address,
+            success: true,
+        });
+
+        const categoryData = await master.getLanguageData(langName);
+        expect(categoryData.name).toStrictEqual(langName);
     });
 
     it('should create admin with admin', async () => {
@@ -613,7 +628,10 @@ describe('AlfaMaterCore', () => {
 
     it('complete order', async () => {
         beforeOrderComplete = blockchain.snapshot();
-        let result = await orderContracts[0].sendCompleteOrder(users[0].getSender(), toNano('0.05'), 3);
+
+        const resultMessage: string = "Done :)";
+
+        let result = await orderContracts[0].sendCompleteOrder(users[0].getSender(), toNano('0.05'), 3, resultMessage);
         expect(result.transactions).toHaveTransaction({
             from: users[0].address,
             to: orderContracts[0].address,
@@ -621,7 +639,7 @@ describe('AlfaMaterCore', () => {
             exitCode: ERRORS.UNAUTHORIZED,
         });
 
-        result = await orderContracts[0].sendCompleteOrder(users[1].getSender(), toNano('0.05'), 3);
+        result = await orderContracts[0].sendCompleteOrder(users[1].getSender(), toNano('0.05'), 3, resultMessage);
         expect(result.transactions).toHaveTransaction({
             from: users[1].address,
             to: orderContracts[0].address,
@@ -629,6 +647,9 @@ describe('AlfaMaterCore', () => {
         });
         const orderData = await orderContracts[0].getOrderData();
         expect(orderData.status).toStrictEqual(Status.fulfilled);
+
+        const orderResult = await orderContracts[0].getOrderResult();
+        expect(orderResult).toStrictEqual(resultMessage);
     });
 
     it('customer feedback (success)', async () => {
@@ -789,7 +810,7 @@ describe('AlfaMaterCore', () => {
     });
 
     it('force payment after check time', async () => {
-        await orderContracts[0].sendCompleteOrder(users[1].getSender(), toNano('0.05'), 3);
+        await orderContracts[0].sendCompleteOrder(users[1].getSender(), toNano('0.05'), 3, "qwerty");
         blockchain.now = Math.floor(Date.now() / 1000) + 1000;
         const result = await orderContracts[0].sendForcePayment(users[1].getSender(), toNano('0.05'), 3);
         expect(result.transactions).toHaveTransaction({

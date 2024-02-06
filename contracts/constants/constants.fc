@@ -24,6 +24,8 @@ const int status::arbitration_solved = 10;
 const int status::outdated = 11;
 
 const int hash::category = "category"H;
+const int hash::result = "result"H;
+const int hash::language = "language"H;
 
 const int const::scale_factor = 1000000000; ;; 1e9
 const int const::agreement_perc = 666666667;

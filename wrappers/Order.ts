@@ -129,11 +129,11 @@ export class Order implements Contract {
         });
     }
 
-    async sendCompleteOrder(provider: ContractProvider, via: Sender, value: bigint, queryID: number) {
+    async sendCompleteOrder(provider: ContractProvider, via: Sender, value: bigint, queryID: number, result: string) {
         await provider.internal(via, {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: beginCell().storeUint(OPCODES.COMPLETE_ORDER, 32).storeUint(queryID, 64).endCell(),
+            body: beginCell().storeUint(OPCODES.COMPLETE_ORDER, 32).storeUint(queryID, 64).storeRef(beginCell().storeStringTail(result).endCell()).endCell(),
         });
     }
 
@@ -223,5 +223,14 @@ export class Order implements Contract {
             responses: responses.beginParse().loadDictDirect(Dictionary.Keys.Address(), Dictionary.Values.Cell()),
             responsesCount,
         };
+    }
+
+    async getOrderResult(provider: ContractProvider): Promise<string> {
+        const result = await provider.get('get_result', []);
+        const orderResultCell = result.stack.readCellOpt();
+        if (orderResultCell == null) {
+            return "";
+        }
+        return orderResultCell.beginParse().loadStringTail();
     }
 }

@@ -1,5 +1,6 @@
 ;; --------------- Order ---------------
 
+const int op::init_order = 15;
 const int op::activate_order = 1;
 const int op::add_response = 2;
 const int op::assign_user = 3;
@@ -14,6 +15,7 @@ const int op::process_arbitration = 6;
 const int op::set_admins = 17;
 const int op::order_completed = 20;
 const int op::order_completed_notification = 21;
+const int op::master_log = 239;
 
 ;; --------------- Master ---------------
 
@@ -35,6 +37,8 @@ const int op::create_category = 34;
 const int op::delete_category = 35;
 const int op::activate_category = 36;
 const int op::deactivate_category = 37;
+const int op::create_language = 51;
+const int op::delete_language = 52;
 const int op::create_user = 39;
 const int op::change_fees = 46;
 const int op::change_category_percent = 47;

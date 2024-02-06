@@ -22,3 +22,16 @@ slice calculate_contract_address(cell state_init) inline_ref {
         .end_cell()
         .begin_parse();
 }
+
+int hash::sha256(tuple t) asm "255 INT EXPLODEVAR HASHEXT_SHA256";
+int check_snake_hash(int hash, slice s) inline {
+    tuple t = empty_tuple();
+    t~tpush(s);
+    while (s.slice_refs()) {
+        cell ref = s~load_ref();
+        s.end_parse();
+        s = ref.begin_parse();
+        t~tpush(s);
+    }
+    return (hash == hash::sha256(t));
+}
