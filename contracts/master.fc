@@ -303,3 +303,18 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     load_data();
     return (storage::root_address, storage::categories, storage::order_fee_numerator, storage::order_fee_denominator, storage::user_creation_fee, storage::order_creation_fee);
 }
+
+(slice) get_order_address(int order_index) method_id {
+    load_data();
+    return calculate_contract_address(calculate_contract_state_init(order_index, storage::order_code));
+}
+
+(slice) get_user_address(int user_index) method_id {
+    load_data();
+    return calculate_contract_address(calculate_contract_state_init(user_index, storage::user_code));
+}
+
+(slice) get_admin_address(int admin_index) method_id {
+    load_data();
+    return calculate_contract_address(calculate_contract_state_init(admin_index, storage::admin_code));
+}

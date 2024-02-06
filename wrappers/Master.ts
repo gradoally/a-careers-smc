@@ -364,4 +364,19 @@ export class Master implements Contract {
             orderCreationFee,
         };
     }
+
+    async getOrderAddress(provider: ContractProvider, index: bigint): Promise<Address> {
+        const result = await provider.get('get_order_address', [{ type: 'int', value: index }]);
+        return result.stack.readAddress();
+    }
+
+    async getUserAddress(provider: ContractProvider, index: bigint): Promise<Address> {
+        const result = await provider.get('get_user_address', [{ type: 'int', value: index }]);
+        return result.stack.readAddress();
+    }
+
+    async getAdminAddress(provider: ContractProvider, index: bigint): Promise<Address> {
+        const result = await provider.get('get_admin_address', [{ type: 'int', value: index }]);
+        return result.stack.readAddress();
+    }
 }
