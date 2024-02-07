@@ -29,6 +29,8 @@ global cell storage::content;
         storage::revoked_at = 0;
         storage::content = null();
     }
+
+    ds.end_parse();
 }
 
 () save_data() impure {

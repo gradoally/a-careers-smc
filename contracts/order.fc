@@ -67,6 +67,8 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     } else {
         storage::init? = false;
     }
+
+    ds.end_parse();
 }
 
 () save_data() impure {

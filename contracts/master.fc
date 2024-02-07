@@ -67,6 +67,8 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     storage::order_creation_fee = ds~load_coins();
 
     storage::languages = ds~load_dict();
+
+    ds.end_parse();
 }
 
 () save_data() impure {
