@@ -288,6 +288,7 @@ describe('AlfaMaterCore', () => {
             portfolio: 'test',
             resume: 'test',
             specialization: 'test',
+            language: 'en',
         });
         const masterBalanceBefore = (await blockchain.getContract(master.address)).balance;
         const result = await master.sendCreateUser(users[0].getSender(), toNano('4'), 3, content);
@@ -449,6 +450,7 @@ describe('AlfaMaterCore', () => {
             portfolio: 'test',
             resume: 'test',
             specialization: 'test',
+            language: 'en',
         });
         const masterBalanceBefore = (await blockchain.getContract(master.address)).balance;
         const result = await master.sendCreateUser(users[1].getSender(), toNano('5'), 3, content);
@@ -941,6 +943,7 @@ describe('AlfaMaterCore', () => {
             portfolio: 'test',
             resume: 'test',
             specialization: 'test',
+            language: 'en',
         });
         const result = await userContracts[1].sendChangeContent(users[1].getSender(), toNano('0.05'), 3, newContent);
         expect(result.transactions).toHaveTransaction({

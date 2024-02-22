@@ -178,6 +178,13 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
         in_msg_body.end_parse();
         throw_unless(error::not_enough_ton, msg_value >= (storage::user_creation_fee + fee::user_creation));
         raw_reserve(storage::user_creation_fee, 4);
+
+        (cell admin_lang, int f) = content.udict_get_ref?(256, hash::language);
+        throw_unless(error::invalid_content, f == true);
+        int lang_hash = admin_lang.begin_parse().preload_uint(256);
+        (_, int f) = storage::languages.udict_get_ref?(256, lang_hash);
+        throw_unless(error::language_not_exist, f);
+
         int user_index = storage::user_next_index;
         cell user_state_init = calculate_contract_state_init(user_index, storage::user_code);
         slice user_contract_address = calculate_contract_address(user_state_init);

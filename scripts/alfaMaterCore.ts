@@ -78,6 +78,7 @@ async function buildContentForUser(provider: NetworkProvider) {
     const portfolio = await ui.input('Portfolio:');
     const resume = await ui.input('Resume:');
     const specialization = await ui.input('Specialization:');
+    const language = await ui.input('Language:');
 
     const content = buildUserContent({
         isUser,
@@ -89,6 +90,7 @@ async function buildContentForUser(provider: NetworkProvider) {
         portfolio,
         resume,
         specialization,
+        language,
     });
     ui.write(content.toBoc().toString('hex'));
 }
