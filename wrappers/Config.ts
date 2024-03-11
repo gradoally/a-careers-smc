@@ -52,6 +52,7 @@ export const OPCODES = {
     REVOKE_ADMIN: 25,
     REVOKE_USER_ADMIN: 40,
     REVOKE_ADMIN_ADMIN: 41,
+    MASTER_LOG: 239,
 };
 
 export const ERRORS = {

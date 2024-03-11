@@ -44,6 +44,19 @@ global cell storage::content;
     );
 }
 
+() just_notify_master(int query_id, int op) impure inline {
+    builder msg = begin_cell()
+        .store_uint(flag::non_bounceable, 6)
+        .store_slice(storage::master_address)
+        .store_uint(0, 111)
+        .store_uint(op::master_log, 32)
+        .store_uint(op, 32)
+        .store_uint(query_id, 64)
+        .store_uint(storage::index, 64);
+
+    send_raw_message(msg.end_cell(), 1);
+}
+
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     slice cs = in_msg_full.begin_parse();
     int flags = cs~load_uint(4);
@@ -112,6 +125,7 @@ global cell storage::content;
         }
 
         if (op == op::change_content_user) {
+            just_notify_master(query_id, op);
             cell new_content = in_msg_body~load_ref();
             in_msg_body.end_parse();
             storage::content = new_content;

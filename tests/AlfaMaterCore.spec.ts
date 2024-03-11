@@ -503,6 +503,12 @@ describe('AlfaMaterCore', () => {
             success: true,
             op: OPCODES.ADD_RESPONSE,
         });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: master.address,
+            success: false,
+            op: OPCODES.MASTER_LOG,
+        });
 
         const responsesData = await orderContracts[0].getResponses();
         expect(responsesData.responsesCount).toStrictEqual(1);
@@ -553,6 +559,12 @@ describe('AlfaMaterCore', () => {
             users[1].address,
         );
         expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: master.address,
+            success: false,
+            op: OPCODES.MASTER_LOG,
+        });
+        expect(result.transactions).toHaveTransaction({
             from: users[0].address,
             to: orderContracts[0].address,
             success: true,
@@ -576,6 +588,12 @@ describe('AlfaMaterCore', () => {
         const result = await orderContracts[0].sendRejectOrder(users[1].getSender(), toNano('0.05'), 3);
         expect(result.transactions).toHaveTransaction({
             from: orderContracts[0].address,
+            to: master.address,
+            success: false,
+            op: OPCODES.MASTER_LOG,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
             to: users[0].address,
         });
         const orderData = await orderContracts[0].getOrderData();
@@ -596,6 +614,12 @@ describe('AlfaMaterCore', () => {
         expect(orderData.status).toStrictEqual(Status.waiting_freelancer);
 
         const result = await orderContracts[0].sendCancelAssign(users[0].getSender(), toNano('0.05'), 3);
+        expect(result.transactions).toHaveTransaction({
+            from: orderContracts[0].address,
+            to: master.address,
+            success: false,
+            op: OPCODES.MASTER_LOG,
+        });
         expect(result.transactions).toHaveTransaction({
             from: orderContracts[0].address,
             to: users[0].address,
@@ -950,6 +974,12 @@ describe('AlfaMaterCore', () => {
             from: users[1].address,
             to: userContracts[1].address,
             success: true,
+        });
+        expect(result.transactions).toHaveTransaction({
+            from: userContracts[1].address,
+            to: master.address,
+            success: false,
+            op: OPCODES.MASTER_LOG,
         });
 
         const userData = await userContracts[1].getUserData();
