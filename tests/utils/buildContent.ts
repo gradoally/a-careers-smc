@@ -30,8 +30,6 @@ export type OrderData = {
     category: string;
     language: string;
     name: string;
-    price: bigint;
-    deadline: number;
     description: string;
     technicalTask: string;
 };
@@ -78,8 +76,6 @@ export function buildOrderContent(data: OrderData): Cell {
     content.set(sha256Hash('category'), beginCell().storeUint(sha256Hash(data.category), 256).endCell());
     content.set(sha256Hash('language'), beginCell().storeUint(sha256Hash(data.language), 256).endCell());
     content.set(sha256Hash('name'), beginCell().storeStringTail(data.name).endCell());
-    content.set(sha256Hash('price'), beginCell().storeCoins(data.price).endCell());
-    content.set(sha256Hash('deadline'), beginCell().storeUint(data.deadline, 32).endCell());
     content.set(sha256Hash('description'), beginCell().storeStringTail(data.description).endCell());
     content.set(sha256Hash('technical_task'), beginCell().storeStringTail(data.technicalTask).endCell());
 

@@ -100,8 +100,6 @@ async function buildContentForOrder(provider: NetworkProvider) {
     const category = await ui.input('Category:');
     const language = await ui.input('Language:');
     const name = await ui.input('Name:');
-    const price = toNano(await ui.input('Price:'));
-    const deadline = parseInt(await ui.input('Deadline:'));
     const description = await ui.input('Description:');
     const technicalTask = await ui.input('Technical task:');
 
@@ -109,8 +107,6 @@ async function buildContentForOrder(provider: NetworkProvider) {
         category,
         language,
         name,
-        price,
-        deadline,
         description,
         technicalTask,
     });

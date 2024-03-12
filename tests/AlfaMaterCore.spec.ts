@@ -348,8 +348,6 @@ describe('AlfaMaterCore', () => {
         const content = buildOrderContent({
             category: 'test',
             name: 'test',
-            price: toNano('10'),
-            deadline: Math.floor(Date.now() / 1000) + 100,
             description: 'test',
             technicalTask: 'test',
             language: 'en',
