@@ -807,6 +807,16 @@ describe('AlfaMaterCore', () => {
         printTransactionFees(result.transactions, 'arbitration processing', addresses);
     });
 
+    it('refund before deadline', async () => {
+        blockchain.now = Math.floor(Date.now() / 1000) + 50;
+        const result = await orderContracts[0].sendRefund(users[0].getSender(), toNano('0.05'), 3);
+        expect(result.transactions).toHaveTransaction({
+            from: users[0].address,
+            to: orderContracts[0].address,
+            success: false,
+        });
+    });
+
     it('refund after deadline', async () => {
         blockchain.now = Math.floor(Date.now() / 1000) + 1000;
         const result = await orderContracts[0].sendRefund(users[0].getSender(), toNano('0.05'), 3);

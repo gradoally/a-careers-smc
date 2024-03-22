@@ -283,6 +283,7 @@ _ index:uint64 master_address:MsgAddressInt customer_address:MsgAddressInt freel
     if (op == op::refund) {
         throw_unless(error:unauthorized, equal_slices(sender_address, storage::customer_address));
         throw_unless(error::invalid_status, storage::status == status::in_progress);
+        throw_unless(error::too_early, now() > storage::deadline);
         notify_master_completion(query_id, 100000000, 1); ;; 0.1 TON
         cell body = begin_cell()
             .store_uint(op::order_completed, 32)
