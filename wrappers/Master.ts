@@ -320,14 +320,6 @@ export class Master implements Contract {
         });
     }
 
-    async send81(provider: ContractProvider, via: Sender, value: bigint, queryID: number) {
-        await provider.internal(via, {
-            value,
-            sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: beginCell().storeUint(81, 32).storeUint(queryID, 64).endCell(),
-        });
-    }
-
     async getIndexes(provider: ContractProvider): Promise<Indexes> {
         const result = await provider.get('get_indexes', []);
 

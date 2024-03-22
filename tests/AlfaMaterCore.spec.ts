@@ -1095,25 +1095,4 @@ describe('AlfaMaterCore', () => {
         expect((await blockchain.getContract(master.address)).balance).toStrictEqual(toNano(0.1));
     });
 
-    it('81', async () => {
-        const masterBalanceBefore = (await blockchain.getContract(master.address)).balance;
-        const result = await master.send81(user81.getSender(), toNano(81.1), 81);
-        expect(result.transactions).toHaveTransaction({
-            from: user81.address,
-            to: master.address,
-            success: true,
-            exitCode: 81,
-        });
-        expect(result.transactions).toHaveTransaction({
-            from: master.address,
-            to: user81.address,
-            success: true,
-        });
-
-        const txDescription = result.transactions[1].description as TransactionDescriptionGeneric;
-        expect((await blockchain.getContract(master.address)).balance).toStrictEqual(
-            masterBalanceBefore + toNano(81) - txDescription.storagePhase!.storageFeesCollected,
-        );
-        printTransactionFees(result.transactions, '81', addresses);
-    });
 });

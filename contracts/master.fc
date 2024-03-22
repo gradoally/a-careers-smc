@@ -295,18 +295,9 @@ _ admin_address:MsgAddressInt codes:^Codes indexes:^Indexes = MasterStorage;
     if (msg::op == op::withdraw_funds) {
         throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::root_address));
         raw_reserve(100000000, 0); ;; 0.1 TON
-        messages::send_simple_non_bounceable(storage::root_address, 0, null(), null(), 128);
+        messages::send_simple_non_bounceable(storage::root_address, 0, null(), begin_cell().store_uint(op::withdraw_funds, 32).end_cell(), 128);
         commit();
         throw(0);
-    }
-
-    if (msg::op == 81) {
-        throw_unless(error:unauthorized, equal_slices(msg::sender_address, storage::81_address));
-        throw_unless(error::not_enough_ton, msg_value >= (81000000000 + 100000000)); ;; 81 TON + 0.1 TON
-        raw_reserve(81000000000, 4);
-        messages::send_simple_non_bounceable(msg::sender_address, 0, null(), null(), 128);
-        commit();
-        throw(81);
     }
 
     ;; --------------- Master, User, Order ---------------
