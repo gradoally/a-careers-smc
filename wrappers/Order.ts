@@ -233,4 +233,15 @@ export class Order implements Contract {
         }
         return orderResultCell.beginParse().loadStringTail();
     }
+
+    async getForcePaymentAvailability(provider: ContractProvider) {
+        const { stack } = await provider.get('get_force_payment_availability', []);
+        return stack.readNumber();
+    }
+
+    async getRefundAvailability(provider: ContractProvider) {
+        const { stack } = await provider.get('get_refund_availability', []);
+        return stack.readNumber();
+    }
+    
 }

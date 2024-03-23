@@ -448,3 +448,33 @@ cell get_result() method_id {
     (cell result, _) = content.udict_get_ref?(256, hash::result);
     return result;
 }
+
+(int) get_force_payment_availability() method_id {
+    load_data();
+    int available? = 0;
+    if (storage::status == status::fulfilled) {
+        if (now() > (storage::completed_at + storage::time_for_check)) {
+            available? = -1;
+        } else {
+            available? = 0;
+        }
+    } else {
+        available? = 0;
+    }
+    return available?;
+}
+
+(int) get_refund_availability() method_id {
+    load_data();
+    int available? = 0;
+    if (storage::status == status::in_progress) {
+        if (now() > storage::deadline) {
+            available? = -1;
+        } else {
+            available? = 0;
+        }
+    } else {
+        available? = 0;
+    }
+    return available?;
+}

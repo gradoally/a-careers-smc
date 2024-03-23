@@ -809,6 +809,7 @@ describe('AlfaMaterCore', () => {
 
     it('refund before deadline', async () => {
         blockchain.now = Math.floor(Date.now() / 1000) + 50;
+        expect(await orderContracts[0].getRefundAvailability()).toBe(Number(0));
         const result = await orderContracts[0].sendRefund(users[0].getSender(), toNano('0.05'), 3);
         expect(result.transactions).toHaveTransaction({
             from: users[0].address,
@@ -819,6 +820,7 @@ describe('AlfaMaterCore', () => {
 
     it('refund after deadline', async () => {
         blockchain.now = Math.floor(Date.now() / 1000) + 1000;
+        expect(await orderContracts[0].getRefundAvailability()).toBe(Number(-1));
         const result = await orderContracts[0].sendRefund(users[0].getSender(), toNano('0.05'), 3);
         expect(result.transactions).toHaveTransaction({
             from: users[0].address,
@@ -845,7 +847,9 @@ describe('AlfaMaterCore', () => {
 
     it('force payment after check time', async () => {
         await orderContracts[0].sendCompleteOrder(users[1].getSender(), toNano('0.05'), 3, "qwerty");
+        expect(await orderContracts[0].getForcePaymentAvailability()).toBe(Number(0));
         blockchain.now = Math.floor(Date.now() / 1000) + 1000;
+        expect(await orderContracts[0].getForcePaymentAvailability()).toBe(Number(-1));
         const result = await orderContracts[0].sendForcePayment(users[1].getSender(), toNano('0.05'), 3);
         expect(result.transactions).toHaveTransaction({
             from: users[1].address,
