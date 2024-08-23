@@ -102,35 +102,18 @@ async function buildContentForOrder(provider: NetworkProvider) {
     const name = await ui.input('Name:');
     const description = await ui.input('Description:');
     const technicalTask = await ui.input('Technical task:');
-
-    const content = buildOrderContent({
-        category,
-        language,
-        name,
-        description,
-        technicalTask,
-    });
-    ui.write(content.toBoc().toString('hex'));
-}
-
+    const content = buildOrderContent({category, language, name, description, technicalTask, });
+    ui.write(content.toBoc().toString('hex')); }
 async function buildContentForResponse(provider: NetworkProvider) {
     const ui = provider.ui();
     const text = await ui.input('Text:');
     const price = toNano(await ui.input('Price:'));
     const deadline = parseInt(await ui.input('Deadline:'));
-    const data: ResponseData = {
-        text,
-        price,
-        deadline,
-    };
-
+    const data: ResponseData = { text, price, deadline, };
     const content = buildResponseContent(data);
-    ui.write(content.toBoc().toString('hex'));
-}
-
+    ui.write(content.toBoc().toString('hex')); }
 async function buildContentForResult(provider: NetworkProvider) {
     const ui = provider.ui();
     const text = await ui.input('Result text:');
     const content = beginCell().storeStringTail(text).endCell();
-    ui.write(content.toBoc().toString('hex'));
-}
+    ui.write(content.toBoc().toString('hex')); }
