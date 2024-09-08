@@ -1,4 +1,6 @@
-# alfa-mater-core
+# A Careers Smart-contracts
+
+Decentralized freelance-exchange with user profiles on blockchain TON.
 
 ## Project structure
 
