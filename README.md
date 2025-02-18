@@ -2,27 +2,72 @@
 
 Decentralized freelance-exchange with user profiles on blockchain TON.
 
-## Project structure
+## Project Structure
 
--   `contracts` - source code of all the smart contracts of the project and their dependencies.
--   `wrappers` - wrapper classes (implementing `Contract` from ton-core) for the contracts, including any [de]serialization primitives and compilation functions.
--   `tests` - tests for the contracts.
--   `scripts` - scripts used by the project, mainly the deployment scripts.
+-   `contracts` - Source code of all the smart contracts of the project and their dependencies.
+-   `wrappers` - Wrapper classes (implementing `Contract` from ton-core) for the contracts, including any [de]serialization primitives and compilation functions.
+-   `tests` - Tests for the contracts.
+-   `scripts` - Scripts used by the project, mainly the deployment scripts.
 
-## How to use
+## Getting Started
 
-### Build
+### Prerequisites
+- Node.js
+- Yarn or npm
 
-`npx blueprint build` or `yarn blueprint build`
+### Installation
 
-### Test
+1. Clone the repository:
+    ```sh
+    git clone https://github.com/gradoally/a-careers-smc.git
+    cd a-careers-smc
+    ```
 
-`npx blueprint test` or `yarn blueprint test`
+2. Install dependencies:
+    ```sh
+    yarn install
+    # or
+    npm install
+    ```
 
-### Deploy or run another script
+### Usage
 
-`npx blueprint run` or `yarn blueprint run`
+#### Build
 
-### Add a new contract
+```sh
+npx blueprint build
+# or
+yarn blueprint build
+```
 
-`npx blueprint create ContractName` or `yarn blueprint create ContractName`
+#### Test
+
+```sh
+npx blueprint test
+# or
+yarn blueprint test
+```
+
+#### Deploy or Run Another Script
+
+```sh
+npx blueprint run
+# or
+yarn blueprint run
+```
+
+#### Add a New Contract
+
+```sh
+npx blueprint create ContractName
+# or
+yarn blueprint create ContractName
+```
+
+## Contributing
+
+We welcome contributions! Please see the [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
